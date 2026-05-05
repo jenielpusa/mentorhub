@@ -1,60 +1,47 @@
 import { useTheme } from "@/hooks/use-theme";
-
-import { Bell, ChevronsLeft, Moon, Search, Sun } from "lucide-react";
-
-import profileImg from "@/assets/profile-image.jpg";
-
+import { Bell, Menu, X, Moon, Sun } from "lucide-react";
 import PropTypes from "prop-types";
 
 export const Header = ({ collapsed, setCollapsed }) => {
     const { theme, setTheme } = useTheme();
 
     return (
-        <header className="relative z-10 flex h-[60px] items-center justify-between bg-white px-4 shadow-md transition-colors dark:bg-slate-900">
-            <div className="flex items-center gap-x-3">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur-md transition-colors dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="flex items-center gap-x-4">
+                {/* Collapse/Menu Toggle */}
                 <button
-                    className="btn-ghost size-10"
+                    className="flex size-10 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
                     onClick={() => setCollapsed(!collapsed)}
+                    aria-label="Toggle Sidebar"
                 >
-                    <ChevronsLeft className={collapsed && "rotate-180"} />
+                    {collapsed ? (
+                        <Menu size={24} className="transition-all" />
+                    ) : (
+                        <X size={24} className="transition-all" />
+                    )}
                 </button>
-                <div className="input">
-                    <Search
-                        size={20}
-                        className="text-slate-300"
-                    />
-                    <input
-                        type="text"
-                        name="search"
-                        id="search"
-                        placeholder="Search..."
-                        className="w-full bg-transparent text-slate-900 outline-0 placeholder:text-slate-300 dark:text-slate-50"
-                    />
-                </div>
+                
+                {/* Opsyonal: Lagyan ng Dashboard Title o Brand dito */}
+                <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                    Dashboard
+                </h1>
             </div>
-            <div className="flex items-center gap-x-3">
+
+            <div className="flex items-center gap-x-2">
+                {/* Theme Toggle */}
                 <button
-                    className="btn-ghost size-10"
+                    className="flex size-10 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
                     onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                    title="Palitan ang Tema"
                 >
-                    <Sun
-                        size={20}
-                        className="dark:hidden"
-                    />
-                    <Moon
-                        size={20}
-                        className="hidden dark:block"
-                    />
+                    <Sun size={20} className="dark:hidden" />
+                    <Moon size={20} className="hidden dark:block" />
                 </button>
-                <button className="btn-ghost size-10">
+
+                {/* Notifications */}
+                <button className="relative flex size-10 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
                     <Bell size={20} />
-                </button>
-                <button className="size-10 overflow-hidden rounded-full">
-                    <img
-                        src={profileImg}
-                        alt="profile image"
-                        className="size-full object-cover"
-                    />
+                    <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900"></span>
                 </button>
             </div>
         </header>

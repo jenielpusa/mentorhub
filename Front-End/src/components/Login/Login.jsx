@@ -134,9 +134,8 @@ export default function CashAssistanceAuthForm() {
                             <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                                 <div className="space-y-16 py-12 md:space-y-24 md:py-20 lg:space-y-32">
                                     <MissionandVision />
-                                    <StatsSection />
+                
                                     <AboutSection />
-                                    <ContactSection />
                                 </div>
                             </div>
 

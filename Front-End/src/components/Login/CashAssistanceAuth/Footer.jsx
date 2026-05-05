@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import logo from "../../../assets/bipsulogo.png";
-import { Mail, Phone, MapPin, Globe, ExternalLink } from "lucide-react";
+import { Mail, Phone, MapPin, Globe, ExternalLink, ArrowUp, Facebook, Twitter, Linkedin, Youtube } from "lucide-react";
 
 const FooterQuickAccess = ({ onNavigateToSection }) => {
     const bipsulinks = [
@@ -27,85 +27,129 @@ const FooterQuickAccess = ({ onNavigateToSection }) => {
         scrollToSection(pageId);
     };
 
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    const socialLinks = [
+        { icon: Facebook, url: "https://facebook.com/bipsu", label: "Facebook" },
+        { icon: Twitter, url: "https://twitter.com/bipsu", label: "Twitter" },
+        { icon: Linkedin, url: "https://linkedin.com/school/bipsu", label: "LinkedIn" },
+        { icon: Youtube, url: "https://youtube.com/bipsu", label: "YouTube" },
+    ];
+
     return (
-        <footer className="bg-blue-950 border-t border-white/10 pt-16 pb-8 text-blue-100">
-            <div className="mx-auto max-w-7xl px-6 lg:px-8">
-                <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4">
+        <footer className="relative bg-slate-950 border-t border-slate-800 pt-16 pb-8 text-slate-300">
+            
+            {/* Subtle Background Pattern */}
+            <div className="absolute inset-0 opacity-30 pointer-events-none">
+                <div 
+                    className="absolute inset-0"
+                    style={{
+                        backgroundImage: `radial-gradient(circle at 2px 2px, rgba(59,130,246,0.15) 1px, transparent 1px)`,
+                        backgroundSize: '40px 40px'
+                    }}
+                />
+            </div>
+
+            <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-8">
+                
+                {/* Main Footer Grid - Simplified */}
+                <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-12">
                     
-                    {/* COLUMN 1: BRANDING */}
-                    <div className="flex flex-col gap-6">
-                        <div className="flex items-center gap-4">
-                            <img src={logo} alt="BiPSU Logo" className="h-16 w-16 object-contain" />
+                    {/* Brand Section - 4 columns */}
+                    <div className="lg:col-span-4 space-y-5">
+                        <div className="flex items-center gap-3">
+                            <img src={logo} alt="BiPSU Logo" className="h-12 w-12 object-contain" />
                             <div>
-                                <h3 className="text-xl font-black tracking-tighter text-white">
-                                    Mentor<span className="text-yellow-500">Hub</span>
+                                <h3 className="text-xl font-bold text-white">
+                                    Mentor<span className="text-blue-500">Hub</span>
                                 </h3>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                                     BiPSU Research Portal
                                 </p>
                             </div>
                         </div>
-                        <p className="text-sm leading-relaxed text-blue-200/60 font-medium italic">
-                            The official repository and management system for Biliran Island State University’s intellectual properties and research manuscripts.
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                            The official digital repository and management system for Biliran Island State University's research manuscripts and intellectual properties.
                         </p>
+                        
+                        {/* Social Links */}
+                        <div className="flex gap-3 pt-2">
+                            {socialLinks.map((social, idx) => {
+                                const Icon = social.icon;
+                                return (
+                                    <a
+                                        key={idx}
+                                        href={social.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-2 rounded-lg bg-slate-800/50 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 transition-all duration-300 hover:scale-105"
+                                        aria-label={social.label}
+                                    >
+                                        <Icon size={18} />
+                                    </a>
+                                );
+                            })}
+                        </div>
                     </div>
 
-                    {/* COLUMN 2: QUICK NAV */}
-                    <div>
-                        <h4 className="mb-6 text-sm font-black uppercase tracking-[0.2em] text-yellow-500">
-                            Quick Navigation
+                    {/* Quick Links - 2 columns */}
+                    <div className="lg:col-span-2">
+                        <h4 className="mb-5 text-xs font-bold uppercase tracking-wider text-blue-500">
+                            Navigation
                         </h4>
-                        <ul className="space-y-4 text-sm font-semibold">
-                            {["home", "about", "departments"].map((id) => (
-                                <li key={id}>
+                        <ul className="space-y-3">
+                            {["Home", "About Us", "Departments", "Research Hub"].map((item, idx) => (
+                                <li key={idx}>
                                     <button 
-                                        onClick={() => handleNavigate(id)}
-                                        className="hover:text-yellow-500 transition-colors capitalize flex items-center gap-2"
+                                        onClick={() => handleNavigate(item.toLowerCase().replace(" ", ""))}
+                                        className="text-sm text-slate-400 hover:text-blue-400 transition-colors duration-200 flex items-center gap-2 group"
                                     >
-                                        <span className="h-1 w-1 rounded-full bg-blue-500" />
-                                        {id}
+                                        <span className="w-1 h-1 rounded-full bg-slate-600 group-hover:bg-blue-500 transition-colors" />
+                                        {item}
                                     </button>
                                 </li>
                             ))}
                         </ul>
                     </div>
 
-                    {/* COLUMN 3: CONTACT INFO */}
-                    <div>
-                        <h4 className="mb-6 text-sm font-black uppercase tracking-[0.2em] text-yellow-500">
-                            Contact Us
+                    {/* Contact Info - 3 columns */}
+                    <div className="lg:col-span-3">
+                        <h4 className="mb-5 text-xs font-bold uppercase tracking-wider text-blue-500">
+                            Contact
                         </h4>
-                        <ul className="space-y-4 text-sm text-blue-200/80">
-                            <li className="flex items-start gap-3">
-                                <MapPin size={18} className="text-blue-400 shrink-0" />
-                                <span>P.I. Garcia St., Naval, Province of Biliran, 6560</span>
+                        <ul className="space-y-3 text-sm text-slate-400">
+                            <li className="flex items-start gap-3 hover:text-slate-300 transition-colors">
+                                <MapPin size={16} className="text-blue-500 shrink-0 mt-0.5" />
+                                <span>P.I. Garcia St., Naval, Biliran, 6560</span>
                             </li>
-                            <li className="flex items-center gap-3">
-                                <Phone size={18} className="text-blue-400 shrink-0" />
+                            <li className="flex items-center gap-3 hover:text-slate-300 transition-colors">
+                                <Phone size={16} className="text-blue-500 shrink-0" />
                                 <span>(053) 500-9035</span>
                             </li>
-                            <li className="flex items-center gap-3">
-                                <Mail size={18} className="text-blue-400 shrink-0" />
+                            <li className="flex items-center gap-3 hover:text-slate-300 transition-colors">
+                                <Mail size={16} className="text-blue-500 shrink-0" />
                                 <span>research@bipsu.edu.ph</span>
                             </li>
                         </ul>
                     </div>
 
-                    {/* COLUMN 4: EXTERNAL LINKS */}
-                    <div>
-                        <h4 className="mb-6 text-sm font-black uppercase tracking-[0.2em] text-yellow-500">
-                            External Resources
+                    {/* Resources - 3 columns */}
+                    <div className="lg:col-span-3">
+                        <h4 className="mb-5 text-xs font-bold uppercase tracking-wider text-blue-500">
+                            Resources
                         </h4>
-                        <ul className="space-y-3">
-                            {bipsulinks.map((link, index) => (
+                        <ul className="space-y-2">
+                            {bipsulinks.slice(0, 4).map((link, index) => (
                                 <li key={index}>
                                     <a
                                         href={link.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-xs font-bold text-blue-200/60 hover:text-white flex items-center gap-2 group transition-all"
+                                        className="text-sm text-slate-400 hover:text-blue-400 flex items-center gap-2 group transition-colors duration-200"
                                     >
-                                        <ExternalLink size={12} className="group-hover:text-yellow-500" />
+                                        <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                                         {link.name}
                                     </a>
                                 </li>
@@ -114,24 +158,39 @@ const FooterQuickAccess = ({ onNavigateToSection }) => {
                     </div>
                 </div>
 
-                {/* BOTTOM BAR */}
-                <div className="mt-16 border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-center gap-6">
+                {/* Bottom Bar - Minimal */}
+                <div className="mt-12 pt-6 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 text-xs">
                     <div className="flex flex-col items-center md:items-start gap-1">
-                        <p className="text-[10px] font-bold text-blue-200/40 uppercase tracking-widest">
-                            &copy; {new Date().getFullYear()} Biliran Island State University.
+                        <p className="text-slate-500">
+                            © {new Date().getFullYear()} Biliran Island State University
                         </p>
-                        <p className="text-[9px] text-blue-200/20 uppercase tracking-tighter">
-                            Designed & Developed as Capstone Project Implementation
+                        <p className="text-slate-600 text-[10px]">
+                            Capstone Project | Version 2.0
                         </p>
                     </div>
                     
-                    <div className="flex gap-8 text-[10px] font-black uppercase tracking-widest text-blue-200/40">
-                        <span className="hover:text-yellow-500 cursor-pointer transition-colors">Privacy Policy</span>
-                        <span className="hover:text-yellow-500 cursor-pointer transition-colors">Terms of Use</span>
-                        <span className="hover:text-yellow-500 cursor-pointer transition-colors">University Ethics</span>
+                    <div className="flex gap-6">
+                        <span className="text-slate-600 hover:text-blue-500 cursor-pointer transition-colors text-[10px] uppercase tracking-wider">
+                            Privacy
+                        </span>
+                        <span className="text-slate-600 hover:text-blue-500 cursor-pointer transition-colors text-[10px] uppercase tracking-wider">
+                            Terms
+                        </span>
+                        <span className="text-slate-600 hover:text-blue-500 cursor-pointer transition-colors text-[10px] uppercase tracking-wider">
+                            Ethics
+                        </span>
                     </div>
                 </div>
             </div>
+
+            {/* Modern Scroll to Top */}
+            <button
+                onClick={scrollToTop}
+                className="fixed bottom-8 right-8 p-2.5 rounded-full bg-blue-600/90 backdrop-blur-sm text-white shadow-lg hover:shadow-blue-600/30 transition-all duration-300 hover:scale-110 hover:bg-blue-700 z-50"
+                aria-label="Scroll to top"
+            >
+                <ArrowUp size={18} />
+            </button>
         </footer>
     );
 };

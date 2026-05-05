@@ -86,18 +86,22 @@ exports.DisplayProposal = AsyncErrorHandler(async (req, res) => {
 
   const matchStage = {};
 
+  // 🔹 Role filter
   if (role === "organizer") {
-    matchStage.submitted_by = userId;
+    matchStage.submitted_by = new mongoose.Types.ObjectId(userId);
   }
 
+  // 🔹 Search
   if (search) {
     matchStage.title = { $regex: search.trim(), $options: "i" };
   }
 
+  // 🔹 Status filter
   if (status) {
     matchStage.status = status;
   }
 
+  // 🔹 Date filter
   if (dateFrom || dateTo) {
     matchStage.created_at = {};
 
@@ -115,22 +119,57 @@ exports.DisplayProposal = AsyncErrorHandler(async (req, res) => {
   const result = await ProposalModel.aggregate([
     { $match: matchStage },
 
+    // 🔹 ORGANIZER (submitted_by)
     {
       $lookup: {
-        from: "organizers",
+        from: "students", // check mo kung tama
         localField: "submitted_by",
         foreignField: "_id",
         as: "organizerInfo",
       },
     },
 
+    // 🔹 ADVISER
+    {
+      $lookup: {
+        from: "userloginschemas",
+        localField: "adviserId",
+        foreignField: "_id",
+        as: "adviserInfo",
+      },
+    },
+
+    // 🔹 CO-ADVISER
+    {
+      $lookup: {
+        from: "userloginschemas",
+        localField: "coAdviserId",
+        foreignField: "_id",
+        as: "coAdviserInfo",
+      },
+    },
+
+    // 🔹 UNWIND (safe)
     {
       $unwind: {
         path: "$organizerInfo",
         preserveNullAndEmptyArrays: true,
       },
     },
+    {
+      $unwind: {
+        path: "$adviserInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $unwind: {
+        path: "$coAdviserInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
 
+    // 🔹 SORT
     { $sort: { created_at: -1 } },
 
     {
@@ -149,16 +188,40 @@ exports.DisplayProposal = AsyncErrorHandler(async (req, res) => {
               created_at: 1,
               fileName: 1,
               fileUrl: 1,
-              submitted_by: 1,
 
-              "organizerInfo._id": 1,
-              "organizerInfo.first_name": 1,
-              "organizerInfo.middle_name": 1,
-              "organizerInfo.last_name": 1,
-              "organizerInfo.gender": 1,
-              "organizerInfo.contact_number": 1,
-              "organizerInfo.email": 1,
-              "organizerInfo.avatar": 1,
+              // 🔥 ORGANIZER NAME
+              organizerName: {
+                $ifNull: [
+                  {
+                    $concat: [
+                      "$organizerInfo.first_name",
+                      " ",
+                      "$organizerInfo.last_name",
+                    ],
+                  },
+                  "N/A",
+                ],
+              },
+
+              // ⚠️ ADMIN WALANG NAME → fallback muna
+              adviserName: {
+                $ifNull: [
+                  "$adviserInfo.id_number",
+                  "N/A",
+                ],
+              },
+
+              coAdviserName: {
+                $ifNull: [
+                  "$coAdviserInfo.id_number",
+                  "N/A",
+                ],
+              },
+
+              // 🔹 optional full objects (kung kailangan mo sa frontend)
+              organizerInfo: 1,
+              adviserInfo: 1,
+              coAdviserInfo: 1,
             },
           },
         ],
