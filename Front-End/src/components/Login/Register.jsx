@@ -28,6 +28,7 @@ const RegisterFormModal = ({ isOpen, onClose, role, inline = false }) => {
         specialty: "",
     });
 
+    const [isMember, setIsMember] = useState(false); // State for checkbox
     const [passwordError, setPasswordError] = useState("");
     const [genderError, setGenderError] = useState(""); // for student gender validation
 
@@ -71,10 +72,15 @@ const RegisterFormModal = ({ isOpen, onClose, role, inline = false }) => {
         }
 
         const { confirm_password, ...dataToSend } = formData;
+        
+        // If member checkbox is checked, change the role to "member"
+        if (isMember) {
+            dataToSend.role = "member";
+        }
 
         await AddAdmin(dataToSend);
 
-        console.log(`Submitting ${role} data:`, dataToSend);
+        console.log(`Submitting ${isMember ? "member" : dataToSend.role} data:`, dataToSend);
 
         setTimeout(() => {
             onClose();
@@ -101,6 +107,7 @@ const RegisterFormModal = ({ isOpen, onClose, role, inline = false }) => {
             specialty: "",
             role: role,
         });
+        setIsMember(false); // Reset checkbox
         setPasswordError("");
         setGenderError("");
     };
@@ -119,6 +126,8 @@ const RegisterFormModal = ({ isOpen, onClose, role, inline = false }) => {
                     onBackToLogin={onClose}
                     departments={departments}
                     compact={true}
+                    isMember={isMember}
+                    setIsMember={setIsMember}
                 />
             </div>
         );
@@ -157,6 +166,8 @@ const RegisterFormModal = ({ isOpen, onClose, role, inline = false }) => {
                             role={role}
                             departments={departments}
                             compact={true}
+                            isMember={isMember}
+                            setIsMember={setIsMember}
                         />
                     </motion.div>
                 </motion.div>
@@ -175,7 +186,9 @@ const RegisterFormContent = ({
     role, 
     onBackToLogin,
     departments,
-    compact = false
+    compact = false,
+    isMember,
+    setIsMember
 }) => {
     // Compact styling adjustments
     const inputClasses = compact
@@ -224,7 +237,13 @@ const RegisterFormContent = ({
             <h2 className={`mb-4 text-center font-bold text-blue-950 ${compact ? "text-lg" : "text-2xl"}`}>
                 Register{" "}
                 <span className="text-yellow-500">
-                    {role === "student" ? "Student" : role === "instructor" ? "Instructor" : role === "adviser" ? "Adviser" : "Panelist"}
+                    {role === "student" 
+                        ? (isMember ? "Member" : "Student") 
+                        : role === "instructor" 
+                            ? "Instructor" 
+                            : role === "adviser" 
+                                ? "Adviser" 
+                                : "Panelist"}
                 </span>
             </h2>
 
@@ -232,6 +251,31 @@ const RegisterFormContent = ({
                 onSubmit={handleSubmit}
                 className="space-y-3"
             >
+                {/* Member Checkbox - Show only for student role */}
+                {role === "student" && (
+                    <div className="flex items-center space-x-2 rounded-lg bg-blue-50/50 p-2">
+                        <input
+                            type="checkbox"
+                            id="memberCheckbox"
+                            checked={isMember}
+                            onChange={(e) => setIsMember(e.target.checked)}
+                            className="h-4 w-4 rounded border-blue-300 text-yellow-500 focus:ring-2 focus:ring-yellow-400"
+                        />
+                        <label htmlFor="memberCheckbox" className="text-sm font-medium text-blue-900">
+                            Register as Member (instead of Student)
+                        </label>
+                    </div>
+                )}
+
+                {/* Show role info if member is checked */}
+                {role === "student" && isMember && (
+                    <div className="rounded-lg bg-yellow-50 p-2 text-center">
+                        <p className="text-xs text-yellow-800">
+                            This user will be registered as a <strong>Member</strong> instead of Student
+                        </p>
+                    </div>
+                )}
+
                 {/* ID Field */}
                 <div className="space-y-1">
                     <label className={labelClasses}>{idLabel}</label>

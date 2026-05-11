@@ -22,6 +22,8 @@ const Department = require("./Routes/DepartmentRoute");
 
 const Document = require("./Routes/documentRoute");
 
+const Groupname = require("./Routes/GroupName");
+
 let app = express();
 
 const logger = function (req, res, next) {
@@ -75,6 +77,10 @@ app.use("/api/v1/LogsAudit", Logs);
 app.use("/api/v1/Student", Student);
 app.use("/api/v1/Department", Department);
 app.use("/api/v1/Document", Document);
+app.use("/api/v1/Groupname", Groupname);
+
+
+
 
 app.use(ErrorController);
 

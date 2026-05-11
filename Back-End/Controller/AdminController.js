@@ -5,7 +5,7 @@ const fs = require("fs");
 const axios = require("axios");
 const { URLSearchParams } = require("url");
 const FormData = require("form-data");
-
+const Student = require("../Models/StudentSchema")
 exports.deleteAdmin = AsyncErrorHandler(async (req, res, next) => {
   const AdminID = req.params.id;
 
@@ -110,25 +110,25 @@ exports.DisplayAdmin = AsyncErrorHandler(async (req, res) => {
 
     ...(search
       ? [
-          {
-            $addFields: {
-              fullName: { $concat: ["$first_name", " ", "$last_name"] },
-            },
+        {
+          $addFields: {
+            fullName: { $concat: ["$first_name", " ", "$last_name"] },
           },
-          {
-            $match: {
-              $or: [
-                { first_name: { $regex: search, $options: "i" } },
-                { last_name: { $regex: search, $options: "i" } },
-                { fullName: { $regex: search, $options: "i" } },
-                {
-                  "deptInfo.departmentName": { $regex: search, $options: "i" },
-                },
-                { "adminProfile.id_number": { $regex: search, $options: "i" } },
-              ],
-            },
+        },
+        {
+          $match: {
+            $or: [
+              { first_name: { $regex: search, $options: "i" } },
+              { last_name: { $regex: search, $options: "i" } },
+              { fullName: { $regex: search, $options: "i" } },
+              {
+                "deptInfo.departmentName": { $regex: search, $options: "i" },
+              },
+              { "adminProfile.id_number": { $regex: search, $options: "i" } },
+            ],
           },
-        ]
+        },
+      ]
       : []),
   ];
 
@@ -313,7 +313,7 @@ exports.UpdateStudentStatusAccount = AsyncErrorHandler(
 
       const updatedUser = await UserLoginSchema.findOneAndUpdate(
         { _id: req.params.id },
-        { 
+        {
           statusAccount,
           isVerified
         },
@@ -371,11 +371,11 @@ exports.DisplayDropdownAdviserPanelist = AsyncErrorHandler(async (req, res) => {
       },
     },
 
-    { 
-      $unwind: { 
-        path: "$adminProfile", 
-        preserveNullAndEmptyArrays: true 
-      } 
+    {
+      $unwind: {
+        path: "$adminProfile",
+        preserveNullAndEmptyArrays: true
+      }
     },
 
     {
@@ -387,11 +387,11 @@ exports.DisplayDropdownAdviserPanelist = AsyncErrorHandler(async (req, res) => {
       },
     },
 
-    { 
-      $unwind: { 
-        path: "$deptInfo", 
-        preserveNullAndEmptyArrays: true 
-      } 
+    {
+      $unwind: {
+        path: "$deptInfo",
+        preserveNullAndEmptyArrays: true
+      }
     },
 
     {
@@ -428,4 +428,227 @@ exports.DisplayDropdownAdviserPanelist = AsyncErrorHandler(async (req, res) => {
     data: users
   });
 
+});
+
+exports.DisplayAdviser = AsyncErrorHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const search = (req.query.search || "").trim();
+  const skip = (page - 1) * limit;
+
+  const pipeline = [
+    {
+      $match: {
+        role: {
+          $in: ["adviser", "panelist"],
+        },
+      },
+    },
+
+    {
+      // Lookup sa admins collection
+      $lookup: {
+        from: "admins",
+        localField: "linkedId",
+        foreignField: "_id",
+        as: "adminProfile",
+      },
+    },
+
+    {
+      $unwind: {
+        path: "$adminProfile",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      // Lookup sa department
+      $lookup: {
+        from: "departments",
+        localField: "adminProfile.department",
+        foreignField: "_id",
+        as: "deptInfo",
+      },
+    },
+
+    {
+      $unwind: {
+        path: "$deptInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // Search functionality
+    ...(search
+      ? [
+        {
+          $addFields: {
+            fullName: {
+              $concat: ["$first_name", " ", "$last_name"],
+            },
+          },
+        },
+
+        {
+          $match: {
+            $or: [
+              {
+                first_name: {
+                  $regex: search,
+                  $options: "i",
+                },
+              },
+
+              {
+                last_name: {
+                  $regex: search,
+                  $options: "i",
+                },
+              },
+
+              {
+                fullName: {
+                  $regex: search,
+                  $options: "i",
+                },
+              },
+
+              {
+                "deptInfo.departmentName": {
+                  $regex: search,
+                  $options: "i",
+                },
+              },
+
+              {
+                "adminProfile.id_number": {
+                  $regex: search,
+                  $options: "i",
+                },
+              },
+            ],
+          },
+        },
+      ]
+      : []),
+  ];
+
+  // Main data
+  const users = await UserLoginSchema.aggregate([
+    ...pipeline,
+
+    {
+      $sort: {
+        createdAt: -1,
+      },
+    },
+
+    {
+      $skip: skip,
+    },
+
+    {
+      $limit: limit,
+    },
+
+    {
+      $project: {
+        _id: 1,
+        first_name: 1,
+        middle_name: 1,
+        last_name: 1,
+        suffix: 1,
+        role: 1,
+        statusAccount: 1,
+
+        email: "$username",
+
+        contact_number: "$adminProfile.contact_number",
+
+        id_number: "$adminProfile.id_number",
+
+        specialty: "$adminProfile.specialty",
+
+        department: "$deptInfo.departmentName",
+
+        avatar: {
+          $ifNull: ["$avatar", "$adminProfile.avatar"],
+        },
+      },
+    },
+  ]);
+
+  // Total count
+  const totalCountResult = await UserLoginSchema.aggregate([
+    ...pipeline,
+    {
+      $count: "total",
+    },
+  ]);
+
+  const totalCount = totalCountResult[0]?.total || 0;
+
+  res.status(200).json({
+    status: "success",
+    totalCount,
+    currentPage: page,
+    totalPages: Math.ceil(totalCount / limit),
+    data: users,
+  });
+});
+
+
+exports.InsertAdvicerCoAdviser = AsyncErrorHandler(async (req, res) => {
+  try {
+    const studentId = req.params.id;
+
+    console.log("req.body",req.body)
+
+    const student = await Student.findById(studentId);
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student not found",
+      });
+    }
+
+    const { adviser, coAdviser } = req.body;
+
+    if (!adviser || !coAdviser) {
+      return res.status(400).json({
+        error: "Adviser and Co-Adviser are required",
+      });
+    }
+
+    student.AdvicerCoadvicer = student.AdvicerCoadvicer.filter(
+      (item) => item.role !== "Adviser" && item.role !== "Co-Adviser"
+    );
+
+    student.AdvicerCoadvicer.push(
+      {
+        user: adviser,
+        role: "Adviser",
+      },
+      {
+        user: coAdviser,
+        role: "Co-Adviser",
+      }
+    );
+
+
+    const updatedStudent = await student.save();
+
+    return res.json({
+      status: "success",
+      data: updatedStudent,
+    });
+
+  } catch (error) {
+    console.error("InsertAdvicerCoAdviser Error:", error);
+
+    return res.status(500).json({
+      error: "Something went wrong.",
+    });
+  }
 });

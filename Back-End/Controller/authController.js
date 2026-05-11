@@ -44,6 +44,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     const requiredFieldsByRole = {
       admin: ["first_name", "last_name", "email", "password"],
       student: ["id_number", "email", "gender", "password"],
+      member:["id_number", "email", "gender", "password"],
       adviser: ["first_name", "last_name", "email", "password"],
       panelist: ["first_name", "last_name", "email", "password"],
       instructor: ["first_name", "last_name", "email", "password"],
@@ -68,6 +69,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     // 3️⃣ Role Mapping
     const profileModels = {
       student: Student,
+      member: Student,
       admin: Admin,
       adviser: Admin,
       panelist: Admin,
@@ -82,7 +84,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     // 4️⃣ Build profile data per schema
     let profileData = {};
 
-    if (role === "student") {
+    if (role === "student" || "member") {
       profileData = {
         studentID: id_number,
         gender,
@@ -163,41 +165,50 @@ exports.login = AsyncErrorHandler(async (req, res, next) => {
     return next(new CustomError("Incorrect email or password", 400));
   }
 
-  // Check if account is verified
-  if (!user.isVerified) {
-    return res.status(401).json({
-      message: "Please verify your email address before logging in.",
-    });
-  }
-
-  // Check if account is BLOCKED
   if (user.statusAccount === "blocked") {
     return res.status(403).json({
-      message:
-        "Your account has been blocked. Please contact the administrator.",
+      message: "Your account has been blocked. Please contact the administrator.",
     });
   }
 
-  // Check statusAccount PENDING (except admin)
   if (user.statusAccount === "pending" && user.role !== "admin") {
     return res.status(403).json({
-      message: "Your account is pending approval. You cannot log in yet.",
+      message: "Your account is still pending approval.",
     });
   }
 
-  let linkId = user.linkedId || user._id;
+  if (user.statusAccount === "rejected") {
+    return res.status(403).json({
+      message: "Your account has been rejected.",
+    });
+  }
+
+  if (
+    user.statusAccount !== "approved" &&
+    user.statusAccount !== "active" &&
+    user.role !== "admin"
+  ) {
+    return res.status(403).json({
+      message: "Your account is not authorized to login.",
+    });
+  }
+
+  // ✅ FIXED ID HANDLING
+  const userId = user._id; // ALWAYS PRIMARY ID
+  const linkId = user.linkedId || user._id; // secondary reference
 
   // Destroy old session if another user is logged in
-  if (req.session.userId && req.session.userId !== user._id) {
+  if (req.session.userId && req.session.userId !== userId) {
     req.session.destroy((err) => {
       if (err) console.log("Failed to destroy old session:", err);
     });
   }
 
-  const token = signToken(user._id, user.role, linkId);
+  // Generate token (keep linkId but userId is primary)
+  const token = signToken(userId, user.role, linkId);
 
-  // Set session
-  req.session.userId = user._id;
+  // Session setup
+  req.session.userId = userId;
   req.session.isLoggedIn = true;
 
   req.session.user = {
@@ -205,13 +216,14 @@ exports.login = AsyncErrorHandler(async (req, res, next) => {
     first_name: user.first_name,
     last_name: user.last_name,
     role: user.role,
-    linkId,
+    userId,   // FIXED: always _id
+    linkId,   // kept for linking logic
     theme: user.theme,
   };
 
   return res.status(200).json({
     status: "Success",
-    userId: user._id,
+    userId,   // FIXED: always _id
     linkId,
     role: user.role,
     token,

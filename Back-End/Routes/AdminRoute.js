@@ -12,6 +12,18 @@ router
   .route("/Profile")
   .get(authController.protect, AdminController.DisplayProfile);
 
+
+router
+  .route("/AdminStatusAccount/:id")
+  .patch(authController.protect, AdminController.UpdateStudentStatusAccount);
+
+router
+  .route("/InsertAdvicerCoAdviser/:id")
+  .patch(authController.protect, AdminController.InsertAdvicerCoAdviser);
+
+router
+  .route("/DisplayAdviser")
+  .get(authController.protect, AdminController.DisplayAdviser);
 router
   .route("/:id")
   .delete(authController.protect, AdminController.deleteAdmin)
@@ -21,8 +33,5 @@ router
     AdminController.UpdateAdmin,
   );
 
-router
-  .route("/AdminStatusAccount/:id")
-  .patch(authController.protect, AdminController.UpdateStudentStatusAccount);
 
 module.exports = router;

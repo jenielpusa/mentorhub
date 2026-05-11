@@ -1,285 +1,1201 @@
-import React, { useState } from 'react';
-import { 
-  LayoutDashboard, FileText, MessageSquare, Calendar, Upload, 
-  CheckCircle, Clock, AlertCircle, LogOut, Bell, Search, 
+// MainDashboard.jsx
+import React, { useState, useContext, useCallback, useEffect, useMemo, useRef } from 'react';
+import { GroupContext } from '../../../contexts/GroupNameContext/GroupNameContext';
+import { AuthContext } from '../../../contexts/AuthContext';
+import StatusModal from "../../../ReusableFolder/SuccessandField";
+import { AdminDisplayContext } from '../../../contexts/AdminContext/AdminContext';
+import { StudentContext } from '../../../contexts/StudentContext/StudentContext';
+import {
+  LayoutDashboard, FileText, MessageSquare, Calendar, Upload,
+  CheckCircle, Clock, AlertCircle, LogOut, Bell, Search,
   ChevronRight, MoreVertical, Menu, X, BookOpen, GraduationCap,
   Users, UserCheck, ShieldCheck, History, FileUp, Plus, Check,
-  RefreshCw, Crown, UserPlus
+  RefreshCw, Crown, UserPlus, Edit2, ThumbsUp, Save, Mail
 } from 'lucide-react';
+// Import all components
+import DashboardHeader from './DashboardHeader';
+import ProgressCard from './ProgressCard';
+import ThesisTitleSection from './ThesisTitleSection';
+import AdviserSelectionSection from './AdviserSelectionSection';
+import GroupLeaderSelection from './GroupLeaderSelection';
+import SelectedLeaderDisplay from './SelectedLeaderDisplay';
+import SelectedAdvisersDisplay from './SelectedAdvisersDisplay';
+import GroupMembersCard from './GroupMembersCard';
+import RegistrationStepsCard from './RegistrationStepsCard';
+import CreateGroupModal from './CreateGroupModal';
+import MemberApprovalModal from './MemberApprovalModal';
+import LeaderConfirmationModal from './LeaderConfirmationModal';
+import LoadingSpinner from './LoadingSpinner';
 
 const MainDashboard = () => {
+  const { faculty, InsertAdvicerCoAdviser } = useContext(AdminDisplayContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  const [selectedLeader, setSelectedLeader] = useState(null);
-  const [selectedAdviser, setSelectedAdviser] = useState(null);
-
-  const [studentData, setStudentData] = useState({
-    name: "Juan Dela Cruz",
-    studentId: "2021-10432",
-    course: "BS Information Technology",
-    groupName: "No Group Joined", 
-    thesisTitle: "TBD", 
-    adviser: "TBA",
-    progress: 0,
-    status: "Incomplete",
+  const { AddGroup, singleGroup, setSingleGroup, FetchSingleGroup } = useContext(GroupContext);
+  const { user, userProfile, linkId, role } = useContext(AuthContext);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const { students, myStudent, Studentlead, SelectLead, GetStudentLead, GetMyStudent, myGroup, myGroupThesis } = useContext(StudentContext)
+  const [statusModalProps, setStatusModalProps] = useState({
+    status: null,
+    error: null,
+    title: "",
+    message: "",
+    onRetry: null,
   });
+  console.log("myGroupThesis", myGroupThesis)
 
-  // Data para sa Members Card (Right Side)
-  const [groupMembers, setGroupMembers] = useState([
-    { id: 1, name: "Juan Dela Cruz", role: "Leader", status: "Active" },
-    { id: 2, name: "Maria Clara", role: "Member", status: "Active" },
-    { id: 3, name: "Ibarra Crisostomo", role: "Member", status: "Active" },
+  // STATE PARA SA LEADER SELECTION (LAMANG PARA SA MEMBER)
+  const [selectedLeader, setSelectedLeader] = useState(null);
+  const [showLeaderModal, setShowLeaderModal] = useState(false);
+  const [isSavingLeader, setIsSavingLeader] = useState(false);
+
+  // PERMANENT/SAVED STATES - galing sa database
+  const [savedAdviser, setSavedAdviser] = useState(null);
+  const [savedCoAdviser, setSavedCoAdviser] = useState(null);
+  const [savedLeader, setSavedLeader] = useState(null);
+
+  console.log("Studentlead", Studentlead)
+  console.log("savedLeader", savedLeader)
+
+  // PROCESS ACTUAL STUDENTLEAD DATA FOR LEADERS
+  const availableLeaders = useMemo(() => {
+    console.log("Processing Studentlead for leaders:", Studentlead);
+
+    if (!Studentlead || !Array.isArray(Studentlead) || Studentlead.length === 0) {
+      console.log("No Studentlead data available");
+      return [];
+    }
+
+    const leaders = Studentlead.filter(student => {
+      const isApproved = student.statusAccount === "approved";
+      const isStudent = student.role === "student";
+      const notSelf = student._id !== userProfile?._id;
+      const notAlreadyLeader = !savedLeader || savedLeader._id !== student._id;
+
+      return isApproved && isStudent && notSelf && notAlreadyLeader;
+    }).map(student => ({
+      id: student._id,
+      _id: student._id,
+      name: `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.username || student.email,
+      firstName: student.first_name || '',
+      lastName: student.last_name || '',
+      studentId: student.linkedId || student._id,
+      course: student.course || "Not specified",
+      email: student.username || student.email,
+      role: student.role || "student",
+      yearLevel: student.yearLevel || 4,
+      section: student.section || "N/A",
+      gwa: student.gwa || 1.8,
+      skills: student.skills || ["Team Player", "Communication"],
+      avatar: student.avatar || null,
+      isActive: student.statusAccount === "approved",
+      previousLeadership: student.previousLeadership || "",
+      achievements: student.achievements || [],
+      statusAccount: student.statusAccount
+    }));
+
+    console.log("Available leaders after processing:", leaders);
+    return leaders;
+  }, [Studentlead, userProfile, savedLeader]);
+
+  const [tempSelectedAdviser, setTempSelectedAdviser] = useState(null);
+  const [tempSelectedCoAdviser, setTempSelectedCoAdviser] = useState(null);
+
+  const [showMemberApprovalModal, setShowMemberApprovalModal] = useState(false);
+  const [selectedMemberForApproval, setSelectedMemberForApproval] = useState(null);
+  const [isSavingAdvisers, setIsSavingAdvisers] = useState(false);
+  const [isLoadingAdvisers, setIsLoadingAdvisers] = useState(true);
+
+  console.log("role", role)
+
+  const renderCount = useRef(0);
+  renderCount.current++;
+
+  // State for thesis title management
+  const [proposedTitles, setProposedTitles] = useState([
+    { id: 1, title: "AI-Powered Learning Management System with Real-time Analytics", status: 'pending' },
+    { id: 2, title: "Blockchain-Based Student Records Management System for BIPSU", status: 'pending' },
+    { id: 3, title: "Mobile Application for Campus Navigation and Event Management", status: 'approved' },
   ]);
 
-  const activeLeaders = [
-    { id: 1, name: "Juan Dela Cruz", group: "Team Innovators", avatar: "JD" },
-    { id: 2, name: "Maria Clara", group: "Cyber Sentinel", avatar: "MC" },
-  ];
-
-  const availableAdvisers = [
-    { id: 1, name: "Dr. Maria Santos", avatar: "MS", color: "bg-blue-500", slots: 3, maxSlots: 5 },
-    { id: 2, name: "Dr. Danilo Cruz", avatar: "DC", color: "bg-purple-500", slots: 5, maxSlots: 5 },
-    { id: 3, name: "Prof. Elena Reyes", avatar: "ER", color: "bg-orange-500", slots: 1, maxSlots: 5 },
-  ];
-
-  const [milestones, setMilestones] = useState({
-    groupCreated: false,
-    membersComplete: false,
-    adviserSelected: false,
-    adviserApproved: false,
-    finalTitle: false
-  });
-
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [customTitle, setCustomTitle] = useState("");
   const [formInput, setFormInput] = useState({ groupName: '' });
 
-  const handleGroupSubmit = (e) => {
-    e.preventDefault();
-    setStudentData(prev => ({
-      ...prev,
-      groupName: formInput.groupName,
-      status: "Group Formed",
-      progress: 20
+  const [milestones, setMilestones] = useState({
+    groupCreated: !!singleGroup?.groupname,
+    membersComplete: false,
+    membersApproved: false,
+    adviserSelected: false,
+    coAdviserSelected: false,
+    titleApproved: false,
+    leaderSelected: false
+  });
+
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [activeLeaders, setActiveLeaders] = useState([]);
+
+  // ================================================================
+  // DEFINE showStatusMessage FIRST before using it in useEffect
+  // ================================================================
+  const handleCloseStatusModal = useCallback(() => {
+    setShowStatusModal(false);
+    setTimeout(() => {
+      setStatusModalProps({
+        status: null,
+        error: null,
+        title: "",
+        message: "",
+        onRetry: null,
+      });
+    }, 300);
+  }, []);
+
+  const showStatusMessage = useCallback((status, error = null, customProps = {}) => {
+    setStatusModalProps({
+      status,
+      error,
+      title: customProps.title || "",
+      message: customProps.message || "",
+      onRetry: customProps.onRetry || null,
+    });
+    setShowStatusModal(true);
+  }, []);
+
+  // LOAD SAVED ADVISERS, CO-ADVISERS, AND LEADER - PRIORITIZE myGroup FOR MEMBER ROLE
+  useEffect(() => {
+    console.log("Loading advisers from myGroup:", myGroup);
+    console.log("Loading advisers from myStudent:", myStudent);
+
+    // For member role, data should come from myGroup
+    if (role === 'member' && myGroup) {
+      // Check for advisers in myGroup.advisers array
+      if (myGroup?.advisers && Array.isArray(myGroup.advisers) && myGroup.advisers.length > 0) {
+        const adviserData = myGroup.advisers.find(item => item.role === "Adviser");
+        const coAdviserData = myGroup.advisers.find(item => item.role === "Co-Adviser");
+        const leaderData = myGroup.advisers.find(item => item.role === "Leader");
+
+        if (adviserData?.user) {
+          const adviserUser = adviserData.user;
+          const adviser = {
+            _id: adviserUser._id,
+            id: adviserUser._id,
+            name: `${adviserUser.first_name || ''} ${adviserUser.last_name || ''}`.trim() || adviserUser.username,
+            firstName: adviserUser.first_name,
+            lastName: adviserUser.last_name,
+            email: adviserUser.username || adviserUser.email,
+            role: adviserUser.role,
+            department: adviserUser.department,
+            isSaved: true
+          };
+          setSavedAdviser(adviser);
+          console.log("Loaded Adviser from myGroup:", adviser);
+        }
+
+        if (coAdviserData?.user) {
+          const coAdviserUser = coAdviserData.user;
+          const coAdviser = {
+            _id: coAdviserUser._id,
+            id: coAdviserUser._id,
+            name: `${coAdviserUser.first_name || ''} ${coAdviserUser.last_name || ''}`.trim() || coAdviserUser.username,
+            firstName: coAdviserUser.first_name,
+            lastName: coAdviserUser.last_name,
+            email: coAdviserUser.username || coAdviserUser.email,
+            role: coAdviserUser.role,
+            department: coAdviserUser.department,
+            isSaved: true
+          };
+          setSavedCoAdviser(coAdviser);
+          console.log("Loaded Co-Adviser from myGroup:", coAdviser);
+        }
+
+        if (leaderData?.user) {
+          const leaderUser = leaderData.user;
+          const leader = {
+            _id: leaderUser._id,
+            id: leaderUser._id,
+            name: `${leaderUser.first_name || ''} ${leaderUser.last_name || ''}`.trim() || leaderUser.username,
+            firstName: leaderUser.first_name,
+            lastName: leaderUser.last_name,
+            email: leaderUser.username || leaderUser.email,
+            studentId: leaderUser.linkedId || leaderUser._id,
+            course: leaderUser.course || "Not specified",
+            role: "Leader",
+            isSaved: true,
+            yearLevel: leaderUser.yearLevel || 4,
+            section: leaderUser.section || "N/A",
+            gwa: leaderUser.gwa || 1.8,
+            skills: leaderUser.skills || ["Team Player", "Communication"]
+          };
+          setSavedLeader(leader);
+          setMilestones(prev => ({ ...prev, leaderSelected: true }));
+          console.log("Loaded Leader from myGroup.advisers:", leader);
+        }
+      }
+
+      // ✅ FIXED: Check for studentLead in myGroup (alternative location for leader)
+      // Only set if fullName is NOT empty or null
+      if (myGroup?.studentLead && myGroup.studentLead.fullName && myGroup.studentLead.fullName.trim() !== "") {
+        const leaderFromGroup = {
+          _id: myGroup.studentLead.id,
+          id: myGroup.studentLead.id,
+          name: myGroup.studentLead.fullName,
+          email: myGroup.studentLead.username || "",
+          role: "Leader",
+          isSaved: true,
+          studentId: myGroup.studentLead.id,
+          course: "Not specified",
+          firstName: myGroup.studentLead.fullName?.split(' ')[0] || '',
+          lastName: myGroup.studentLead.fullName?.split(' ')[1] || '',
+          selectedAt: new Date().toISOString()
+        };
+        setSavedLeader(leaderFromGroup);
+        setMilestones(prev => ({ ...prev, leaderSelected: true }));
+        console.log("Loaded Leader from myGroup.studentLead:", leaderFromGroup);
+      } else if (myGroup?.studentLead && (!myGroup.studentLead.fullName || myGroup.studentLead.fullName.trim() === "")) {
+        // ✅ If studentLead exists but fullName is empty, treat as NO LEADER SELECTED
+        console.log("studentLead found but fullName is empty - no leader selected");
+        setSavedLeader(null);
+        setMilestones(prev => ({ ...prev, leaderSelected: false }));
+      }
+
+      // Load group name from myGroup.group
+      if (myGroup?.group?.name && !milestones.groupCreated) {
+        setMilestones(prev => ({ ...prev, groupCreated: true }));
+      }
+    }
+
+    // Fallback: Check myStudent.AdvicerCoadvicer for non-member roles or backward compatibility
+    if (myStudent?.AdvicerCoadvicer && Array.isArray(myStudent.AdvicerCoadvicer) && myStudent.AdvicerCoadvicer.length > 0) {
+      const adviserData = myStudent.AdvicerCoadvicer.find(item => item.role === "Adviser");
+      const coAdviserData = myStudent.AdvicerCoadvicer.find(item => item.role === "Co-Adviser");
+      const leaderData = myStudent.AdvicerCoadvicer.find(item => item.role === "Leader");
+
+      if (adviserData?.user && !savedAdviser) {
+        const adviserUser = adviserData.user;
+        const adviser = {
+          _id: adviserUser._id,
+          id: adviserUser._id,
+          name: `${adviserUser.first_name || ''} ${adviserUser.last_name || ''}`.trim() || adviserUser.username,
+          firstName: adviserUser.first_name,
+          lastName: adviserUser.last_name,
+          email: adviserUser.username || adviserUser.email,
+          role: adviserUser.role,
+          department: adviserUser.department,
+          isSaved: true
+        };
+        setSavedAdviser(adviser);
+        console.log("Loaded Adviser from myStudent:", adviser);
+      }
+
+      if (coAdviserData?.user && !savedCoAdviser) {
+        const coAdviserUser = coAdviserData.user;
+        const coAdviser = {
+          _id: coAdviserUser._id,
+          id: coAdviserUser._id,
+          name: `${coAdviserUser.first_name || ''} ${coAdviserUser.last_name || ''}`.trim() || coAdviserUser.username,
+          firstName: coAdviserUser.first_name,
+          lastName: coAdviserUser.last_name,
+          email: coAdviserUser.username || coAdviserUser.email,
+          role: coAdviserUser.role,
+          department: coAdviserUser.department,
+          isSaved: true
+        };
+        setSavedCoAdviser(coAdviser);
+        console.log("Loaded Co-Adviser from myStudent:", coAdviser);
+      }
+
+      if (leaderData?.user && !savedLeader) {
+        const leaderUser = leaderData.user;
+        const leader = {
+          _id: leaderUser._id,
+          id: leaderUser._id,
+          name: `${leaderUser.first_name || ''} ${leaderUser.last_name || ''}`.trim() || leaderUser.username,
+          firstName: leaderUser.first_name,
+          lastName: leaderUser.last_name,
+          email: leaderUser.username || leaderUser.email,
+          studentId: leaderUser.studentId || leaderUser.linkedId,
+          course: leaderUser.course,
+          role: "Leader",
+          isSaved: true,
+          yearLevel: leaderUser.yearLevel || 4,
+          section: leaderUser.section || "N/A",
+          gwa: leaderUser.gwa || 1.8,
+          skills: leaderUser.skills || ["Team Player"]
+        };
+        setSavedLeader(leader);
+        setMilestones(prev => ({ ...prev, leaderSelected: true }));
+        console.log("Loaded Leader from myStudent:", leader);
+      }
+    }
+
+    const timer = setTimeout(() => {
+      setIsLoadingAdvisers(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [myGroup, myStudent, userProfile, role]);
+
+  // ================================================================
+  // AUTO-COMPLETE REGISTRATION STEP WHEN TITLE IS APPROVED
+  // ================================================================
+  useEffect(() => {
+    // Check if there's any approved title in the proposedTitles array
+    const hasApprovedTitle = proposedTitles.some(title => title.status === 'approved');
+
+    console.log("🔍 Checking title approval status:", {
+      hasApprovedTitle,
+      currentTitleApproved: milestones.titleApproved,
+      proposedTitles
+    });
+
+    // If there's an approved title and it's not yet marked in milestones
+    if (hasApprovedTitle && !milestones.titleApproved) {
+      console.log("✅ Title approved detected! Updating milestone and progress bar...");
+
+      // Update the milestone to mark title as approved
+      setMilestones(prev => ({
+        ...prev,
+        titleApproved: true
+      }));
+
+      // Optional: Show a subtle success notification
+      // Uncomment if you want a toast notification
+      /*
+      showStatusMessage("success", null, {
+        title: "Thesis Title Approved! 🎉",
+        message: "Your thesis title has been approved. Registration step is now complete!"
+      });
+      */
+    }
+
+    // If no approved title exists but milestone says it's approved, reset it
+    if (!hasApprovedTitle && milestones.titleApproved) {
+      console.log("⚠️ No approved title found, resetting titleApproved milestone");
+      setMilestones(prev => ({
+        ...prev,
+        titleApproved: false
+      }));
+    }
+  }, [proposedTitles, milestones.titleApproved]); // Removed showStatusMessage from dependencies since it's commented out
+
+  // Also check for approved title when myGroupThesis loads (in case titles come from API)
+  useEffect(() => {
+    // If myGroupThesis has thesis data with approved status
+    if (myGroupThesis && myGroupThesis.thesisTitle) {
+      const thesisStatus = myGroupThesis.status || myGroupThesis.thesisStatus;
+      if (thesisStatus === 'approved' && !milestones.titleApproved) {
+        console.log("✅ Approved thesis found in myGroupThesis data!");
+        setMilestones(prev => ({
+          ...prev,
+          titleApproved: true
+        }));
+      }
+    }
+  }, [myGroupThesis, milestones.titleApproved]);
+
+  const handleSelectLeader = useCallback((leader) => {
+    if (savedLeader) {
+      showStatusMessage("error", null, {
+        title: "Leader Already Assigned",
+        message: `Your group already has a leader: ${savedLeader.name}. Contact your administrator to change the leader.`
+      });
+      return;
+    }
+
+    setSelectedLeader(leader);
+    setShowLeaderModal(true);
+  }, [savedLeader, showStatusMessage]);
+
+  const confirmLeaderSelection = useCallback(async () => {
+    if (!selectedLeader) return;
+
+    setIsSavingLeader(true);
+
+    try {
+      // Gamitin ang SelectLead function mula sa context
+      const myStudentId = myStudent?._id || userProfile?.linkedId || linkId;
+
+      if (!myStudentId) {
+        showStatusMessage("error", null, {
+          title: "Error",
+          message: "Cannot find your student ID. Please refresh the page."
+        });
+        return;
+      }
+
+      const result = await SelectLead(myStudentId, selectedLeader._id);
+
+      if (result?.success) {
+        // DIREKTANG I-SET ANG SAVED LEADER GAMIT ANG SELECTED LEADER DATA
+        const newLeader = {
+          _id: selectedLeader._id,
+          id: selectedLeader._id,
+          name: selectedLeader.name,
+          firstName: selectedLeader.firstName,
+          lastName: selectedLeader.lastName,
+          email: selectedLeader.email,
+          studentId: selectedLeader.studentId,
+          course: selectedLeader.course,
+          role: "Leader",
+          isSaved: true,
+          yearLevel: selectedLeader.yearLevel || 4,
+          section: selectedLeader.section || "N/A",
+          gwa: selectedLeader.gwa || 1.8,
+          skills: selectedLeader.skills || ["Team Player"],
+          selectedAt: new Date().toISOString()
+        };
+
+        // I-set agad ang savedLeader para mag-render agad ang UI
+        setSavedLeader(newLeader);
+        setMilestones(prev => ({ ...prev, leaderSelected: true }));
+
+        // I-refresh ang data sa background
+        if (typeof GetStudentLead === 'function') {
+          GetStudentLead();
+        }
+        if (typeof GetMyStudent === 'function') {
+          GetMyStudent();
+        }
+
+        showStatusMessage("success", null, {
+          title: "Leader Selected! 👑",
+          message: `${selectedLeader.name} has been successfully selected as your group leader.`
+        });
+
+        setShowLeaderModal(false);
+        setSelectedLeader(null);
+      } else {
+        showStatusMessage("error", null, {
+          title: "Selection Failed",
+          message: result?.error || "Failed to set group leader. Please try again."
+        });
+      }
+    } catch (error) {
+      console.error("Error saving leader:", error);
+      showStatusMessage("error", null, {
+        title: "Selection Failed",
+        message: error.message || "Failed to set group leader. Please try again."
+      });
+    } finally {
+      setIsSavingLeader(false);
+    }
+  }, [selectedLeader, SelectLead, myStudent, userProfile, linkId, showStatusMessage, GetStudentLead, GetMyStudent]);
+
+  const availableAdvisers = useMemo(() => {
+    if (!faculty || faculty.length === 0) {
+      return [];
+    }
+
+    const advisers = faculty.filter(f =>
+      f.role === 'adviser' || f.role === 'panelist' || f.role === 'Adviser'
+    );
+
+    return advisers.map((f) => ({
+      _id: f._id,
+      id: f._id,
+      name: `${f.first_name || ''} ${f.last_name || ''}`.trim() || f.email,
+      firstName: f.first_name,
+      lastName: f.last_name,
+      email: f.email,
+      department: f.department,
+      contact_number: f.contact_number,
+      specialty: f.specialty,
+      role: f.role,
+      slots: f.currentSlots || 0,
+      maxSlots: f.maxSlots || 5,
+      statusAccount: f.statusAccount,
+      avatar: f.avatar || {}
     }));
-    setMilestones(prev => ({ ...prev, groupCreated: true }));
-    setIsModalOpen(false);
-  };
+  }, [faculty]);
+
+  const progress = useMemo(() => {
+    let allStepsComplete = false;
+
+    if (role === 'member') {
+      allStepsComplete = milestones.groupCreated &&
+        milestones.membersComplete &&
+        milestones.membersApproved &&
+        milestones.leaderSelected &&
+        milestones.titleApproved;
+    } else {
+      allStepsComplete = milestones.groupCreated &&
+        milestones.membersComplete &&
+        milestones.membersApproved &&
+        milestones.adviserSelected &&
+        milestones.coAdviserSelected &&
+        milestones.titleApproved;
+    }
+
+    if (allStepsComplete) return 100;
+
+    let progressValue = 0;
+    if (milestones.groupCreated) progressValue += 10;
+    if (milestones.membersComplete) progressValue += 10;
+    if (milestones.membersApproved) progressValue += 10;
+
+    if (role === 'member') {
+      if (milestones.leaderSelected) progressValue += 15;
+      if (milestones.titleApproved) progressValue += 30;
+    } else {
+      if (milestones.adviserSelected) progressValue += 20;
+      if (milestones.coAdviserSelected) progressValue += 20;
+      if (milestones.titleApproved) progressValue += 15;
+    }
+
+    return Math.min(progressValue, 95);
+  }, [milestones, role]);
+
+  const studentData = useMemo(() => ({
+    name: userProfile?.name || "",
+    studentId: userProfile?.studentId || "",
+    course: userProfile?.course || "",
+    groupName: role === 'student'
+      ? (myGroupThesis?.group?.name || singleGroup?.groupname || "No Group Joined")
+      : (myGroup?.group?.name || singleGroup?.groupname || "No Group Joined"),
+    thesisTitle: userProfile?.thesisTitle || (proposedTitles.find(t => t.status === 'approved')?.title || "TBD"),
+    groupLeader: savedLeader?.name || (role === 'member' ? "No Leader Selected" : "N/A"),
+    adviser: savedAdviser?.name || "TBA",
+    coAdviser: savedCoAdviser?.name || "TBA",
+    progress: progress,
+    status: (() => {
+      let allComplete = false;
+
+      if (role === 'member') {
+        allComplete = milestones.groupCreated && milestones.membersComplete && milestones.membersApproved &&
+          milestones.leaderSelected && milestones.titleApproved;
+      } else {
+        allComplete = milestones.groupCreated && milestones.membersComplete && milestones.membersApproved &&
+          milestones.adviserSelected && milestones.coAdviserSelected && milestones.titleApproved;
+      }
+
+      if (allComplete) return "✓ REGISTRATION COMPLETE! ✓";
+      if (progress >= 80) return "Almost Complete!";
+      if (progress >= 60) return "Members Approved - Proceeding to Adviser";
+      if (progress >= 40) return "In Progress";
+      if (progress >= 15) return "Group Formed";
+      return "Incomplete";
+    })()
+  }), [userProfile, myGroup, myGroupThesis, singleGroup, savedLeader, savedAdviser, savedCoAdviser, progress, milestones, proposedTitles, role]);
+
+  useEffect(() => {
+    setMilestones(prev => ({
+      ...prev,
+      adviserSelected: !!savedAdviser,
+      coAdviserSelected: !!savedCoAdviser,
+      leaderSelected: !!savedLeader
+    }));
+  }, [savedAdviser, savedCoAdviser, savedLeader]);
+
+  useEffect(() => {
+    if (groupMembers.length === 0) {
+      setMilestones(prev => ({ ...prev, membersApproved: false, membersComplete: false }));
+      return;
+    }
+
+    const allMembersApproved = groupMembers.every(member => member.status === 'approved');
+    setMilestones(prev => ({
+      ...prev,
+      membersApproved: allMembersApproved,
+      membersComplete: groupMembers.length >= 1
+    }));
+  }, [groupMembers]);
+
+  // SET GROUP MEMBERS - USE myGroupThesis ONLY FOR STUDENT ROLE, member role stays with myGroup
+  useEffect(() => {
+    // For member role, use myGroup data (DEFAULT LOGIC - HINDI BINAGO)
+    if (role === 'member' && myGroup) {
+      if (myGroup.group?.name) {
+        setMilestones(prev => ({ ...prev, groupCreated: true }));
+      }
+
+      // Extract members from myGroup if available
+      if (myGroup.members && Array.isArray(myGroup.members)) {
+        setGroupMembers(myGroup.members);
+      } else if (myGroup.student) {
+        // If only the current student is in the group
+        setGroupMembers([{
+          id: myGroup.student.id || myGroup.student._id,
+          name: myGroup.student.fullName,
+          role: "Member",
+          studentId: myGroup.studentID,
+          email: myGroup.student.username,
+          status: "approved"
+        }]);
+      }
+    }
+    // For student role, use myGroupThesis data (ITO ANG BAGONG IDINAGDAG)
+    else if (role === 'student' && myGroupThesis) {
+      // Check if myGroupThesis has group name
+      if (myGroupThesis.group?.name) {
+        setMilestones(prev => ({ ...prev, groupCreated: true }));
+      }
+
+      // Extract members from myGroupThesis (array of members)
+      if (Array.isArray(myGroupThesis) && myGroupThesis.length > 0) {
+        const members = myGroupThesis.map(member => {
+          // Get member name from nested structure
+          let memberName = "";
+          let memberId = "";
+          let memberEmail = "";
+          let memberStudentId = "";
+
+          if (member.user?.account) {
+            memberName = member.user.account.fullName || "Unknown Member";
+            memberId = member.user.account.id || member._id;
+            memberEmail = member.user.account.username || "";
+            memberStudentId = member.user.account.studentID || "";
+          } else if (member.user) {
+            memberName = member.user.fullName || member.user.username || "Unknown Member";
+            memberId = member.user._id || member._id;
+            memberEmail = member.user.username || "";
+            memberStudentId = member.user.studentID || "";
+          } else {
+            memberName = member.fullName || member.name || "Unknown Member";
+            memberId = member._id;
+            memberEmail = member.username || "";
+            memberStudentId = member.studentID || "";
+          }
+
+          return {
+            id: memberId,
+            name: memberName,
+            role: "Member",
+            studentId: memberStudentId,
+            email: memberEmail,
+            status: "approved"
+          };
+        });
+
+        setGroupMembers(members);
+        setMilestones(prev => ({
+          ...prev,
+          membersComplete: members.length > 0,
+          membersApproved: true
+        }));
+      }
+      else if (myGroupThesis.members && Array.isArray(myGroupThesis.members)) {
+        setGroupMembers(myGroupThesis.members);
+        setMilestones(prev => ({
+          ...prev,
+          membersComplete: myGroupThesis.members.length > 0,
+          membersApproved: true
+        }));
+      }
+      else if (myGroupThesis.student) {
+        setGroupMembers([{
+          id: myGroupThesis.student.id || myGroupThesis.student._id,
+          name: myGroupThesis.student.fullName || myGroupThesis.student.name,
+          role: "Member",
+          studentId: myGroupThesis.studentID,
+          email: myGroupThesis.student.username,
+          status: "approved"
+        }]);
+        setMilestones(prev => ({
+          ...prev,
+          membersComplete: true,
+          membersApproved: true
+        }));
+      }
+    }
+    // For non-student, non-member roles, use singleGroup
+    else if (singleGroup && singleGroup.groupname) {
+      setMilestones(prev => ({ ...prev, groupCreated: true }));
+
+      if (singleGroup.members) {
+        setGroupMembers(singleGroup.members);
+      } else if (singleGroup.studentID && userProfile?.name && groupMembers.length === 0) {
+        setGroupMembers([{
+          id: singleGroup._id,
+          name: userProfile.name,
+          role: "Member",
+          studentId: singleGroup.studentID,
+          email: userProfile.email || "",
+          gender: singleGroup.gender || "Not specified",
+          status: "approved"
+        }]);
+      }
+    } else {
+      setGroupMembers([]);
+      setMilestones(prev => ({
+        ...prev,
+        groupCreated: false,
+        membersApproved: false
+      }));
+    }
+  }, [singleGroup, userProfile, myGroup, myGroupThesis, role]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const abortController = new AbortController();
+
+    const fetchActiveLeaders = async () => {
+      try {
+        const response = await fetch('/api/active-leaders', { signal: abortController.signal });
+        if (response.ok && isMounted) {
+          const data = await response.json();
+          setActiveLeaders(data);
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError' && isMounted) {
+          console.error("Error fetching active leaders:", error);
+        }
+      }
+    };
+
+    fetchActiveLeaders();
+
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
+  }, []);
+
+  const getFacultyColor = useCallback((name) => {
+    const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
+    const hash = name?.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) || 0;
+    return colors[hash % colors.length];
+  }, []);
+
+  const getFacultyAvatar = useCallback((firstName, lastName) => {
+    if (firstName && lastName) {
+      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+    }
+    if (firstName) return firstName.charAt(0).toUpperCase();
+    if (lastName) return lastName.charAt(0).toUpperCase();
+    return 'F';
+  }, []);
+
+  const getFacultyAvatarColor = useCallback((name) => {
+    const colors = [
+      'bg-gradient-to-br from-blue-500 to-blue-700',
+      'bg-gradient-to-br from-green-500 to-green-700',
+      'bg-gradient-to-br from-purple-500 to-purple-700',
+      'bg-gradient-to-br from-pink-500 to-pink-700',
+      'bg-gradient-to-br from-indigo-500 to-indigo-700',
+      'bg-gradient-to-br from-teal-500 to-teal-700'
+    ];
+    const hash = name?.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) || 0;
+    return colors[hash % colors.length];
+  }, []);
+
+  const getFacultyInitials = useCallback((firstName, lastName) => {
+    if (firstName && lastName) {
+      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+    }
+    if (firstName) return firstName.charAt(0).toUpperCase();
+    if (lastName) return lastName.charAt(0).toUpperCase();
+    return '👨‍🏫';
+  }, []);
+
+  const getLeaderColor = useCallback((name) => {
+    const colors = ['bg-amber-500', 'bg-orange-500', 'bg-yellow-600', 'bg-gold-500', 'bg-amber-600'];
+    const hash = name?.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) || 0;
+    return colors[hash % colors.length];
+  }, []);
+
+  const handleTempSelectAdviser = useCallback((adviser) => {
+    if (tempSelectedCoAdviser?._id === adviser._id) {
+      showStatusMessage("error", null, {
+        title: "Selection Error",
+        message: "This person is already selected as Co-Adviser."
+      });
+      return;
+    }
+    if (savedAdviser?._id === adviser._id) {
+      showStatusMessage("error", null, {
+        title: "Already Assigned",
+        message: "This person is already assigned as your Adviser."
+      });
+      return;
+    }
+    setTempSelectedAdviser(adviser);
+  }, [tempSelectedCoAdviser, savedAdviser, showStatusMessage]);
+
+  const handleTempSelectCoAdviser = useCallback((adviser) => {
+    if (tempSelectedAdviser?._id === adviser._id) {
+      showStatusMessage("error", null, {
+        title: "Selection Error",
+        message: "This person is already selected as Adviser."
+      });
+      return;
+    }
+    if (savedCoAdviser?._id === adviser._id) {
+      showStatusMessage("error", null, {
+        title: "Already Assigned",
+        message: "This person is already assigned as your Co-Adviser."
+      });
+      return;
+    }
+    setTempSelectedCoAdviser(adviser);
+  }, [tempSelectedAdviser, savedCoAdviser, showStatusMessage]);
+
+  const handleSaveBothAdvisers = useCallback(async () => {
+    if (!tempSelectedAdviser || !tempSelectedCoAdviser) {
+      showStatusMessage("error", null, {
+        title: "Incomplete Selection",
+        message: "Please select both Adviser and Co-Adviser before saving."
+      });
+      return;
+    }
+
+    const studentId = linkId || userProfile?.linkedId || myStudent?._id;
+
+    if (!studentId) {
+      showStatusMessage("error", null, {
+        title: "No Student ID Found",
+        message: "Please complete your profile first or refresh the page."
+      });
+      return;
+    }
+
+    setIsSavingAdvisers(true);
+
+    try {
+      const payload = {
+        adviser: {
+          id: tempSelectedAdviser._id,
+          name: tempSelectedAdviser.name,
+          role: "Adviser",
+          email: tempSelectedAdviser.email,
+          department: tempSelectedAdviser.department
+        },
+        coAdviser: {
+          id: tempSelectedCoAdviser._id,
+          name: tempSelectedCoAdviser.name,
+          role: "Co-Adviser",
+          email: tempSelectedCoAdviser.email,
+          department: tempSelectedCoAdviser.department
+        }
+      };
+
+      const result = await InsertAdvicerCoAdviser(studentId, payload);
+
+      if (result?.success) {
+        setSavedAdviser({ ...tempSelectedAdviser, isSaved: true });
+        setSavedCoAdviser({ ...tempSelectedCoAdviser, isSaved: true });
+        setTempSelectedAdviser(null);
+        setTempSelectedCoAdviser(null);
+
+        showStatusMessage("success", null, {
+          title: "Success!",
+          message: `Adviser (${tempSelectedAdviser.name}) and Co-Adviser (${tempSelectedCoAdviser.name}) have been successfully assigned to your group.`
+        });
+      } else {
+        showStatusMessage("error", null, {
+          title: "Save Failed",
+          message: result?.error || "Failed to save adviser assignments."
+        });
+      }
+    } catch (error) {
+      console.error("Error saving advisers:", error);
+      showStatusMessage("error", null, {
+        title: "Error",
+        message: error.message || "An error occurred while saving adviser assignments."
+      });
+    } finally {
+      setIsSavingAdvisers(false);
+    }
+  }, [tempSelectedAdviser, tempSelectedCoAdviser, linkId, userProfile, myStudent, InsertAdvicerCoAdviser, showStatusMessage]);
+
+  const handleResetTempSelection = useCallback(() => {
+    setTempSelectedAdviser(null);
+    setTempSelectedCoAdviser(null);
+  }, []);
+
+  const handleApproveMember = useCallback((member) => {
+    setSelectedMemberForApproval(member);
+    setShowMemberApprovalModal(true);
+  }, []);
+
+  const confirmApproveMember = useCallback(() => {
+    if (!selectedMemberForApproval) return;
+
+    setGroupMembers(prev => prev.map(member =>
+      member.id === selectedMemberForApproval.id
+        ? { ...member, status: 'approved', approvedBy: userProfile?.name, approvedAt: new Date() }
+        : member
+    ));
+
+    showStatusMessage("success", null, {
+      title: "Member Approved! ✅",
+      message: `${selectedMemberForApproval.name} has been approved to join your group.`
+    });
+
+    setShowMemberApprovalModal(false);
+    setSelectedMemberForApproval(null);
+  }, [selectedMemberForApproval, userProfile?.name, showStatusMessage]);
+
+  const handleRejectMember = useCallback((member) => {
+    setGroupMembers(prev => prev.filter(m => m.id !== member.id));
+    showStatusMessage("error", null, {
+      title: "Member Rejected",
+      message: `${member.name} has been rejected from joining the group.`
+    });
+  }, [showStatusMessage]);
+
+  const handleAddCustomTitle = useCallback(() => {
+    if (!customTitle.trim()) {
+      showStatusMessage("error", null, {
+        title: "Empty Title",
+        message: "Please enter a thesis title."
+      });
+      return;
+    }
+
+    const newTitle = {
+      id: proposedTitles.length + 1,
+      title: customTitle,
+      status: 'pending',
+    };
+
+    setProposedTitles(prev => [...prev, newTitle]);
+    setCustomTitle("");
+    setIsEditingTitle(false);
+
+    showStatusMessage("success", null, {
+      title: "Title Added",
+      message: "Your proposed title has been added. Wait for approval from your adviser and co-adviser."
+    });
+  }, [customTitle, proposedTitles.length, showStatusMessage]);
+
+  // Function to approve a title (call this from child components or when receiving API response)
+  const handleApproveTitle = useCallback((titleId) => {
+    setProposedTitles(prev => prev.map(title =>
+      title.id === titleId
+        ? { ...title, status: 'approved' }
+        : title
+    ));
+
+    // The useEffect will automatically detect this change and update milestones
+    console.log(`Title ${titleId} approved - useEffect will handle milestone update`);
+  }, []);
+
+  const handleGroupSubmit = useCallback(async (e) => {
+    e.preventDefault();
+
+    const groupData = {
+      name: userProfile?.name || studentData.name,
+      studentId: userProfile?.studentId || studentData.studentId,
+      course: userProfile?.course || studentData.course,
+      groupName: formInput.groupName,
+      thesisTitle: studentData.thesisTitle,
+      groupLeader: studentData.groupLeader,
+      adviser: studentData.adviser,
+      coAdviser: studentData.coAdviser,
+      progress: 10,
+      status: "Group Formed"
+    };
+
+    const result = await AddGroup(groupData);
+
+    if (result?.success) {
+      setMilestones(prev => ({ ...prev, groupCreated: true }));
+      FetchSingleGroup();
+      setIsModalOpen(false);
+      showStatusMessage("success", null, { title: "Group Created", message: "Group created successfully." });
+    } else {
+      showStatusMessage("error", null, { title: "Update Failed", message: result?.message || "Failed to create group" });
+    }
+  }, [userProfile, studentData, formInput.groupName, AddGroup, showStatusMessage]);
+
+  const getRemainingSteps = useCallback(() => {
+    const steps = [];
+    if (!milestones.membersComplete) steps.push("Add group members");
+    if (!milestones.membersApproved && groupMembers.length > 0) steps.push("Leader approves members");
+
+    if (role === 'member') {
+      if (!milestones.leaderSelected) steps.push("Select Group Leader");
+    } else {
+      if (!milestones.adviserSelected) steps.push("Select Adviser");
+      if (!milestones.coAdviserSelected) steps.push("Select Co-Adviser");
+    }
+
+    if (!milestones.titleApproved) steps.push("Thesis Title Approval");
+    return steps;
+  }, [milestones, groupMembers.length, role]);
+
+  const allStepsComplete = useMemo(() => {
+    const baseComplete = milestones.groupCreated && milestones.membersComplete &&
+      milestones.membersApproved && milestones.titleApproved;
+
+    if (role === 'member') {
+      return baseComplete && milestones.leaderSelected;
+    }
+
+    return baseComplete && milestones.adviserSelected && milestones.coAdviserSelected;
+  }, [milestones, role]);
 
   const bipsuGlass = "backdrop-blur-xl bg-white/60 border border-white/40 shadow-[0_20px_50px_rgba(0,56,168,0.05)]";
   const floatingClass = "backdrop-blur-2xl bg-white/70 border border-white shadow-[0_30px_60px_-15px_rgba(0,56,168,0.2)] transition-all duration-500";
 
   return (
     <div className="min-h-screen relative overflow-hidden font-sans text-slate-900 p-3 md:p-6 ">
-      <div className="fixed -top-24 -right-24 w-96 h-96 bg-[#0038A8]/10 rounded-full blur-[100px] pointer-events-none"></div>
-      
-      <main className="relative z-10 max-w-7xl mx-auto">
-        <section className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-          <div className="flex items-center gap-6">
-            <div className="h-20 w-20 rounded-[2.5rem] bg-gradient-to-br from-[#0038A8] to-blue-800 flex items-center justify-center text-white shadow-2xl ring-4 ring-white">
-              <GraduationCap size={40} />
-            </div>
-            <div>
-              <h1 className="text-3xl md:text-4xl font-black text-[#0038A8] tracking-tight">
-                Mabuhay, <span className="text-[#FFD700]">{studentData.name.split(' ')[0]}!</span> 
-              </h1>
-              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-1 italic">
-                {studentData.course} • ID: {studentData.studentId}
-              </p>
-            </div>
-          </div>
+      {isLoadingAdvisers && <LoadingSpinner />}
 
-          <button className="flex items-center gap-3 bg-white border-2 border-[#0038A8] text-[#0038A8] px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#0038A8] hover:text-white transition-all shadow-lg active:scale-95 group">
-            <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />
-            Check Manuscript Revisions
-          </button>
-        </section>
+      <div className="fixed -top-24 -right-24 w-[500px] h-[500px] bg-[#0038A8]/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+
+      <main className="relative z-10 max-w-7xl mx-auto">
+        <DashboardHeader
+          studentData={studentData}
+          role={role}
+        />
+
+        {/* ================================================================ */}
+        {/* GROUP LEADER SELECTION SECTION - ONLY FOR MEMBER ROLE (NO LEADER YET) */}
+        {/* ================================================================ */}
+        {role === 'member' && !savedLeader && (
+          <GroupLeaderSelection
+            availableLeaders={availableLeaders}
+            Studentlead={Studentlead}
+            handleSelectLeader={handleSelectLeader}
+            getLeaderColor={getLeaderColor}
+            bipsuGlass={bipsuGlass}
+          />
+        )}
+
+        {/* ================================================================ */}
+        {/* DISPLAY SELECTED LEADER SECTION - When leader is already saved */}
+        {/* ================================================================ */}
+        {role === 'member' && savedLeader && (
+          <SelectedLeaderDisplay
+            savedLeader={savedLeader}
+            getLeaderColor={getLeaderColor}
+            bipsuGlass={bipsuGlass}
+          />
+        )}
+
+        {/* ADVISER AND CO-ADVISER DISPLAY SECTION - FOR MEMBER ROLE */}
+        {role === 'member' && (savedAdviser || savedCoAdviser) && (
+          <SelectedAdvisersDisplay
+            savedAdviser={savedAdviser}
+            savedCoAdviser={savedCoAdviser}
+            getFacultyAvatarColor={getFacultyAvatarColor}
+            getFacultyInitials={getFacultyInitials}
+            bipsuGlass={bipsuGlass}
+          />
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-8 space-y-8">
-            
             {/* MAIN TRACKING CARD */}
-            <div className={`${bipsuGlass} rounded-[3rem] p-8 relative overflow-hidden`}>
-              <div className="mb-8">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="px-4 py-1.5 bg-[#0038A8] text-white text-[9px] font-black rounded-xl uppercase tracking-widest shadow-lg">Current Status</span>
-                    <h2 className={`text-4xl font-black mt-5 leading-tight uppercase tracking-tighter ${studentData.groupName === "No Group Joined" ? 'text-slate-300' : 'text-[#0038A8]'}`}>
-                      {studentData.groupName}
-                    </h2>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-4xl font-black text-[#0038A8]">{studentData.progress}%</span>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Overall Completion</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="relative h-4 bg-slate-100 rounded-full overflow-hidden border border-white mb-8">
-                <div 
-                  className="h-full bg-gradient-to-r from-[#0038A8] via-blue-600 to-[#FFD700] transition-all duration-1000 ease-out" 
-                  style={{ width: `${studentData.progress}%` }}
-                ></div>
-              </div>
+            <ProgressCard
+              studentData={studentData}
+              progress={progress}
+              milestones={milestones}
+              savedLeader={savedLeader}
+              role={role}
+              savedAdviser={savedAdviser}
+              savedCoAdviser={savedCoAdviser}
+              groupMembers={groupMembers}
+              allStepsComplete={allStepsComplete}
+              getRemainingSteps={getRemainingSteps}
+              bipsuGlass={bipsuGlass}
+            />
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <StatusStat label="Members" value={milestones.membersComplete ? "Complete" : "Pending"} icon={<Users size={12}/>} />
-                <StatusStat label="Adviser" value={selectedAdviser ? selectedAdviser.name : "TBA"} icon={<UserCheck size={12}/>} />
-                <StatusStat label="Registration" value={studentData.status} highlight />
-                <StatusStat label="Final Title" value={studentData.thesisTitle} icon={<FileText size={12}/>} />
-              </div>
-            </div>
+            {/* THESIS TITLE SECTION */}
+            <ThesisTitleSection
+              proposedTitles={proposedTitles}
+              milestones={milestones}
+              isEditingTitle={isEditingTitle}
+              customTitle={customTitle}
+              setCustomTitle={setCustomTitle}
+              setIsEditingTitle={setIsEditingTitle}
+              handleAddCustomTitle={handleAddCustomTitle}
+              onApproveTitle={handleApproveTitle}
+              bipsuGlass={bipsuGlass}
+            />
 
-            {/* ACTIVE LEADERS */}
-            <div className={`${bipsuGlass} rounded-[3rem] p-8`}>
-              <h3 className="font-black text-xl text-[#0038A8] uppercase tracking-tighter italic flex items-center gap-3 mb-6">
-                <Crown className="text-[#FFD700]" size={24} /> Active Leaders
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {activeLeaders.map((leader) => (
-                  <button 
-                    key={leader.id} 
-                    onClick={() => setSelectedLeader(leader.id)}
-                    className={`flex items-center justify-between p-4 rounded-3xl transition-all border-2 text-left ${selectedLeader === leader.id ? 'border-[#0038A8] bg-blue-50/50' : 'border-white bg-white/40'}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-[#0038A8] text-white flex items-center justify-center font-black">{leader.avatar}</div>
-                      <div>
-                        <h4 className="text-[11px] font-black text-[#0038A8] leading-none">{leader.name}</h4>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{leader.group}</p>
-                      </div>
-                    </div>
-                    {selectedLeader === leader.id && <CheckCircle size={20} className="text-[#0038A8]" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* ADVISER CANDIDATES */}
-            <div className={`${bipsuGlass} rounded-[3rem] p-8`}>
-              <h3 className="font-black text-xl text-[#0038A8] uppercase tracking-tighter italic flex items-center gap-3 mb-6">
-                <ShieldCheck className="text-[#FFD700]" size={24} /> Adviser Candidates
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {availableAdvisers.map((adv) => (
-                  <button 
-                    key={adv.id} 
-                    disabled={adv.slots >= adv.maxSlots}
-                    onClick={() => setSelectedAdviser(adv)}
-                    className={`p-5 rounded-[2.5rem] border-2 transition-all flex flex-col items-center relative group ${selectedAdviser?.id === adv.id ? 'border-[#0038A8] bg-white' : 'border-transparent bg-white/40'} ${adv.slots >= adv.maxSlots ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#0038A8] hover:bg-white'}`}
-                  >
-                    {selectedAdviser?.id === adv.id && (
-                      <div className="absolute top-4 right-4 text-[#0038A8]"><CheckCircle size={20} /></div>
-                    )}
-                    <div className={`h-12 w-12 rounded-full ${adv.color} flex items-center justify-center text-white font-black mb-3`}>{adv.avatar}</div>
-                    <h4 className="text-[11px] font-black text-[#0038A8]">{adv.name}</h4>
-                    <div className="mt-3 w-full px-4">
-                      <div className="flex justify-between text-[8px] font-bold uppercase mb-1">
-                        <span>Slots</span>
-                        <span className={adv.slots >= adv.maxSlots ? 'text-red-500' : 'text-slate-400'}>{adv.slots}/{adv.maxSlots}</span>
-                      </div>
-                      <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div className={`h-full ${adv.slots >= adv.maxSlots ? 'bg-red-500' : 'bg-[#0038A8]'}`} style={{ width: `${(adv.slots / adv.maxSlots) * 100}%` }}></div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* ADVISER CANDIDATES SECTION - NOT FOR MEMBER ROLE */}
+            {role !== 'member' && (
+              <AdviserSelectionSection
+                availableAdvisers={availableAdvisers}
+                savedAdviser={savedAdviser}
+                savedCoAdviser={savedCoAdviser}
+                tempSelectedAdviser={tempSelectedAdviser}
+                tempSelectedCoAdviser={tempSelectedCoAdviser}
+                isSavingAdvisers={isSavingAdvisers}
+                handleTempSelectAdviser={handleTempSelectAdviser}
+                handleTempSelectCoAdviser={handleTempSelectCoAdviser}
+                handleSaveBothAdvisers={handleSaveBothAdvisers}
+                handleResetTempSelection={handleResetTempSelection}
+                getFacultyColor={getFacultyColor}
+                getFacultyAvatar={getFacultyAvatar}
+                bipsuGlass={bipsuGlass}
+              />
+            )}
           </div>
 
-          {/* SIDEBAR AREA (Dito ko nilagay ang Members Card) */}
+          {/* SIDEBAR AREA */}
           <div className="lg:col-span-4 space-y-6">
-            
-            {/* DAGDAG: GROUP MEMBERS CARD */}
-            <div className={`${floatingClass} rounded-[3rem] p-8`}>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="font-black text-lg text-[#0038A8] flex items-center gap-2 uppercase italic">
-                  <Users className="text-[#FFD700]" size={20} /> Group Members
-                </h3>
-                <button className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-[#0038A8] hover:bg-[#0038A8] hover:text-white transition-colors">
-                   <UserPlus size={14} />
-                </button>
-              </div>
-              <div className="space-y-4">
-                {groupMembers.map((m) => (
-                  <div key={m.id} className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-50 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-blue-50 text-[#0038A8] flex items-center justify-center text-[10px] font-bold border border-blue-100">
-                        {m.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h4 className="text-[10px] font-black text-[#0038A8] leading-none uppercase">{m.name}</h4>
-                        <p className="text-[8px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">{m.role}</p>
-                      </div>
-                    </div>
-                    <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <GroupMembersCard
+              groupMembers={groupMembers}
+              savedLeader={savedLeader}
+              milestones={milestones}
+              role={role}
+              handleApproveMember={handleApproveMember}
+              handleRejectMember={handleRejectMember}
+              floatingClass={floatingClass}
+            />
 
-            {/* REGISTRATION STEPS (Existing) */}
-            <div className={`${floatingClass} rounded-[3rem] p-8 sticky top-6`}>
-              <h3 className="font-black text-lg text-[#0038A8] mb-6 flex items-center gap-2 uppercase italic">
-                <CheckCircle className="text-[#FFD700]" size={20} /> Registration Steps
-              </h3>
-              <div className="space-y-3">
-                <StepItem label="Create/Join Group" isDone={milestones.groupCreated} />
-                <StepItem label="Complete Members" isDone={milestones.membersComplete} />
-                <StepItem label="Select Adviser" isDone={!!selectedAdviser} />
-                <StepItem label="Adviser's Approval" isDone={milestones.adviserApproved} />
-                <StepItem label="Final Title Selection" isDone={milestones.finalTitle} />
-              </div>
-            </div>
+            <RegistrationStepsCard
+              milestones={milestones}
+              savedLeader={savedLeader}
+              savedAdviser={savedAdviser}
+              savedCoAdviser={savedCoAdviser}
+              role={role}
+              allStepsComplete={allStepsComplete}
+              floatingClass={floatingClass}
+            />
           </div>
         </div>
       </main>
 
-      {/* FAB */}
-      <button onClick={() => setIsModalOpen(true)} className="fixed bottom-8 right-8 h-16 w-16 bg-[#0038A8] hover:bg-blue-700 text-[#FFD700] rounded-full shadow-2xl flex items-center justify-center transition-all z-50">
-        <Plus size={32} strokeWidth={3} />
-      </button>
-
-      {/* MODAL (Existing) */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-          <div className={`${floatingClass} w-full max-w-md rounded-[2.5rem] p-8 relative z-10 animate-in fade-in zoom-in duration-300`}>
-            <h2 className="text-xl font-black text-[#0038A8] italic uppercase mb-6">Create New Group</h2>
-            <form onSubmit={handleGroupSubmit} className="space-y-4">
-              <input 
-                type="text" 
-                placeholder="Enter Group Name" 
-                required
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 focus:border-[#0038A8] outline-none font-bold text-[#0038A8]"
-                value={formInput.groupName}
-                onChange={(e) => setFormInput({groupName: e.target.value})}
-              />
-              <button type="submit" className="w-full bg-[#0038A8] text-[#FFD700] font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest">
-                Initialize Group
-              </button>
-            </form>
-          </div>
-        </div>
+      {/* FAB button - Only show for non-members (members cannot create groups) */}
+      {role !== 'member' && (
+        <button onClick={() => setIsModalOpen(true)} className="fixed bottom-8 right-8 h-16 w-16 bg-[#0038A8] hover:bg-blue-700 text-[#FFD700] rounded-full shadow-2xl flex items-center justify-center transition-all z-50">
+          <Plus size={32} strokeWidth={3} />
+        </button>
       )}
+
+      <CreateGroupModal
+        isModalOpen={isModalOpen}
+        setIsModalOpen={setIsModalOpen}
+        formInput={formInput}
+        setFormInput={setFormInput}
+        handleGroupSubmit={handleGroupSubmit}
+        floatingClass={floatingClass}
+      />
+
+      <MemberApprovalModal
+        showMemberApprovalModal={showMemberApprovalModal}
+        setShowMemberApprovalModal={setShowMemberApprovalModal}
+        selectedMemberForApproval={selectedMemberForApproval}
+        confirmApproveMember={confirmApproveMember}
+        floatingClass={floatingClass}
+      />
+
+      <LeaderConfirmationModal
+        showLeaderModal={showLeaderModal}
+        setShowLeaderModal={setShowLeaderModal}
+        selectedLeader={selectedLeader}
+        isSavingLeader={isSavingLeader}
+        confirmLeaderSelection={confirmLeaderSelection}
+        floatingClass={floatingClass}
+      />
+
+      <StatusModal
+        isOpen={showStatusModal}
+        onClose={handleCloseStatusModal}
+        status={statusModalProps.status}
+        error={statusModalProps.error}
+        title={statusModalProps.title}
+        message={statusModalProps.message}
+        onRetry={statusModalProps.onRetry}
+        autoClose={true}
+        autoCloseTime={3000}
+      />
     </div>
   );
 };
-
-// Sub-components
-const StatusStat = ({ label, value, highlight, icon }) => (
-  <div className="flex flex-col">
-    <span className="text-[9px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1 mb-1">{icon} {label}</span>
-    <span className={`text-[10px] font-black leading-tight ${highlight ? 'text-orange-600' : 'text-[#0038A8]'}`}>{value}</span>
-  </div>
-);
-
-const StepItem = ({ label, isDone }) => (
-  <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${isDone ? 'bg-green-50 border-green-100' : 'bg-slate-50 border-slate-100'}`}>
-    <div className={`h-6 w-6 rounded-full flex items-center justify-center ${isDone ? 'bg-green-500 text-white' : 'bg-white text-slate-300'}`}>
-      {isDone ? <Check size={14} strokeWidth={4} /> : <Clock size={14} />}
-    </div>
-    <span className={`text-[11px] font-black uppercase ${isDone ? 'text-green-700' : 'text-slate-400'}`}>{label}</span>
-  </div>
-);
 
 export default MainDashboard;

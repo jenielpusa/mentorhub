@@ -21,14 +21,18 @@ const UserLoginSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: {
     type: String,
-    enum: ["admin", "student", "adviser","panelist","instructor"],
+    enum: ["admin", "student", "member", "adviser", "panelist", "instructor"],
     required: true,
     lowercase: true,
   },
-   statusAccount: {
+  statusAccount: {
     type: String,
-    enum: ["approved", "pending", "block","unblock"],
+    enum: ["approved", "pending", "block", "unblock"],
     default: "pending"
+  },
+  studentlead: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Student",
   },
   isVerified: { type: Boolean, default: false },
 
@@ -36,7 +40,20 @@ const UserLoginSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     refPath: "role",
   },
+  AdvicerCoadvicer: [
+    {
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Student",
+      },
 
+      role: {
+        type: String,
+        enum: ["Adviser", "Co-Adviser"],
+        required: true,
+      },
+    },
+  ],
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 
@@ -98,7 +115,7 @@ UserLoginSchema.methods.createResetTokenPassword = function () {
     .createHash("sha256")
     .update(resetToken)
     .digest("hex");
-  this.passwordResetTokenExpires = Date.now() + 10 * 60 * 1000; 
+  this.passwordResetTokenExpires = Date.now() + 10 * 60 * 1000;
 
   return resetToken;
 };

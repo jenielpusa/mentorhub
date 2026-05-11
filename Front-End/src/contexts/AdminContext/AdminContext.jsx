@@ -19,13 +19,18 @@ export const AdminDisplayProvider = ({ children }) => {
     const [roleFilter, setRoleFilter] = useState("");
     const [faculty, setFaculty] = useState([]);
 
+    // States for Student Adviser/Co-Adviser management
+    const [students, setStudents] = useState([]);
+    const [selectedStudent, setSelectedStudent] = useState(null);
+    const [studentLoading, setStudentLoading] = useState(false);
+
     // UI states
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [modalStatus, setModalStatus] = useState("success");
     const [customError, setCustomError] = useState("");
 
-    // Fetch admin list para sa table
+    // Fetch faculty list para sa adviser/panelist dropdown
     const fetchFaculty = useCallback(async () => {
         if (!authToken) return;
         try {
@@ -82,6 +87,258 @@ export const AdminDisplayProvider = ({ children }) => {
         }
     }, [authToken, currentPage, limit, searchTerm, roleFilter]);
 
+    // Fetch students list (for adviser/co-adviser assignment)
+    const FetchStudents = useCallback(async (searchQuery = "") => {
+        if (!authToken) return;
+        
+        setStudentLoading(true);
+        try {
+            const params = searchQuery ? { search: searchQuery } : {};
+            const res = await axiosInstance.get(`/api/v1/Student`, {
+                params,
+                withCredentials: true,
+                headers: {
+                    Authorization: `Bearer ${authToken}`,
+                    "Cache-Control": "no-cache",
+                },
+            });
+
+            setStudents(res.data.data || []);
+            return res.data.data;
+        } catch (error) {
+            console.error("Error fetching students:", error);
+            setCustomError("Failed to load students.");
+            return [];
+        } finally {
+            setStudentLoading(false);
+        }
+    }, [authToken]);
+
+    // Fetch single student details
+    const FetchStudentById = useCallback(async (studentId) => {
+        if (!authToken || !studentId) return null;
+        
+        try {
+            const res = await axiosInstance.get(`/api/v1/Student/${studentId}`, {
+                withCredentials: true,
+                headers: {
+                    Authorization: `Bearer ${authToken}`,
+                },
+            });
+
+            if (res.data?.status === "success") {
+                setSelectedStudent(res.data.data);
+                return res.data.data;
+            }
+            return null;
+        } catch (error) {
+            console.error("Error fetching student:", error);
+            setCustomError("Failed to load student details.");
+            return null;
+        }
+    }, [authToken]);
+
+
+const InsertAdvicerCoAdviser = useCallback(async (studentId, data) => {
+  try {
+    console.log("data", data);
+
+    if (!studentId) {
+      return { success: false, error: "Missing studentId" };
+    }
+
+    if (!data?.adviser || !data?.coAdviser) {
+      return { success: false, error: "Adviser and Co-Adviser are required" };
+    }
+
+    const formData = new FormData();
+    
+    // ✅ Isama ang role sa pag-send
+    if (typeof data.adviser === 'object') {
+      formData.append("adviser", data.adviser.id);
+      formData.append("adviserRole", data.adviser.role || "Adviser");
+    } else {
+      formData.append("adviser", data.adviser);
+      formData.append("adviserRole", "Adviser");
+    }
+    
+    if (typeof data.coAdviser === 'object') {
+      formData.append("coAdviser", data.coAdviser.id);
+      formData.append("coAdviserRole", data.coAdviser.role || "Co-Adviser");
+    } else {
+      formData.append("coAdviser", data.coAdviser);
+      formData.append("coAdviserRole", "Co-Adviser");
+    }
+
+    // Ensure avatar is a real File object
+    if (data.avatar instanceof File) {
+      formData.append("avatar", data.avatar);
+    }
+
+    const response = await axiosInstance.patch(
+      `/api/v1/Admin/InsertAdvicerCoAdviser/${studentId}`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+
+    if (response.data?.status === "success") {
+      if (selectedStudent?._id === studentId) {
+        await FetchStudentById(studentId);
+      }
+
+      return {
+        success: true,
+        data: response.data.data,
+        message: "Adviser and Co-Adviser assigned successfully!"
+      };
+    }
+
+    return {
+      success: false,
+      error: response.data?.message || "Failed to assign adviser/co-adviser"
+    };
+
+  } catch (error) {
+    console.error("InsertAdvicerCoAdviser Error:", error);
+
+    const errorMessage =
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      error.message ||
+      "Something went wrong while assigning adviser/co-adviser.";
+
+    setCustomError(errorMessage);
+    setModalStatus("failed");
+    setShowModal(true);
+
+    return { success: false, error: errorMessage };
+  }
+}, [authToken, selectedStudent?._id, FetchStudentById]);
+    // UPDATE existing adviser/co-adviser
+    const UpdateAdvicerCoAdviser = useCallback(async (studentId, data) => {
+        try {
+            const formData = new FormData();
+            formData.append("adviser", data.adviser);
+            formData.append("coAdviser", data.coAdviser);
+            
+            if (data.avatar) {
+                formData.append("avatar", data.avatar);
+            }
+
+            const response = await axiosInstance.put(
+                `/api/v1/Student/${studentId}/advicer-coadvicer`,
+                formData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${authToken}`,
+                        "Content-Type": "multipart/form-data",
+                    },
+                }
+            );
+
+            if (response.data?.status === "success") {
+                setModalStatus("success");
+                setShowModal(true);
+                
+                if (selectedStudent?._id === studentId) {
+                    await FetchStudentById(studentId);
+                }
+                
+                return { 
+                    success: true, 
+                    data: response.data.data,
+                    message: "Adviser and Co-Adviser updated successfully!"
+                };
+            } else {
+                setModalStatus("failed");
+                setShowModal(true);
+                return { 
+                    success: false, 
+                    error: response.data?.message || "Failed to update adviser/co-adviser" 
+                };
+            }
+        } catch (error) {
+            console.error("UpdateAdvicerCoAdviser Error:", error);
+            const errorMessage = error.response?.data?.error || 
+                                error.response?.data?.message || 
+                                "Something went wrong while updating adviser/co-adviser.";
+            setCustomError(errorMessage);
+            setModalStatus("failed");
+            setShowModal(true);
+            return { success: false, error: errorMessage };
+        }
+    }, [authToken, selectedStudent, FetchStudentById]);
+
+    // REMOVE adviser/co-adviser
+    const RemoveAdvicerCoAdviser = useCallback(async (studentId, role) => {
+        try {
+            const response = await axiosInstance.delete(
+                `/api/v1/Student/${studentId}/advicer-coadvicer/${role}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${authToken}`,
+                    },
+                }
+            );
+
+            if (response.data?.status === "success") {
+                setModalStatus("success");
+                setShowModal(true);
+                
+                if (selectedStudent?._id === studentId) {
+                    await FetchStudentById(studentId);
+                }
+                
+                return { 
+                    success: true, 
+                    message: `${role} removed successfully!`
+                };
+            } else {
+                setModalStatus("failed");
+                setShowModal(true);
+                return { 
+                    success: false, 
+                    error: response.data?.message || `Failed to remove ${role}` 
+                };
+            }
+        } catch (error) {
+            console.error("RemoveAdvicerCoAdviser Error:", error);
+            const errorMessage = error.response?.data?.error || 
+                                error.response?.data?.message || 
+                                `Something went wrong while removing ${role}.`;
+            setCustomError(errorMessage);
+            setModalStatus("failed");
+            setShowModal(true);
+            return { success: false, error: errorMessage };
+        }
+    }, [authToken, selectedStudent, FetchStudentById]);
+
+    // Get current adviser and co-adviser of a student
+    const GetStudentAdvisers = useCallback(async (studentId) => {
+        if (!authToken || !studentId) return null;
+        
+        try {
+            const res = await axiosInstance.get(`/api/v1/Student/${studentId}/advisers`, {
+                withCredentials: true,
+                headers: {
+                    Authorization: `Bearer ${authToken}`,
+                },
+            });
+
+            if (res.data?.status === "success") {
+                return res.data.data;
+            }
+            return null;
+        } catch (error) {
+            console.error("Error fetching student advisers:", error);
+            return null;
+        }
+    }, [authToken]);
+
     // Fetch profile ng isang admin (kung kailangan)
     const FetchProfileData = useCallback(async () => {
         if (!authToken || !linkId) return;
@@ -111,6 +368,7 @@ export const AdminDisplayProvider = ({ children }) => {
                     setAdmins((prev) => prev.filter((admin) => admin._id !== adminId));
                     setModalStatus("success");
                     setShowModal(true);
+                    return { success: true };
                 } else {
                     setModalStatus("failed");
                     setShowModal(true);
@@ -118,9 +376,11 @@ export const AdminDisplayProvider = ({ children }) => {
                 }
             } catch (error) {
                 console.error("Error deleting admin:", error);
-                setCustomError(error.response?.data?.message || "Failed to delete admin.");
+                const errorMessage = error.response?.data?.message || "Failed to delete admin.";
+                setCustomError(errorMessage);
                 setModalStatus("failed");
                 setShowModal(true);
+                return { success: false, error: errorMessage };
             }
         },
         [authToken],
@@ -166,6 +426,7 @@ export const AdminDisplayProvider = ({ children }) => {
         [authToken, FetchAdminData],
     );
 
+    // Add new admin
     const AddAdmin = useCallback(
         async (values) => {
             console.log("values", values);
@@ -207,10 +468,9 @@ export const AdminDisplayProvider = ({ children }) => {
                 });
 
                 if (res.data?.status?.toLowerCase() === "success") {
-                    FetchAdminData();
+                    await FetchAdminData();
                     setModalStatus("success");
                     setShowModal(true);
-
                     return { success: true, data: res.data.data };
                 } else {
                     setModalStatus("failed");
@@ -222,12 +482,13 @@ export const AdminDisplayProvider = ({ children }) => {
                 setCustomError(message);
                 setModalStatus("failed");
                 setShowModal(true);
-
                 return { success: false, error: message };
             }
         },
         [authToken, FetchAdminData],
     );
+
+    // Update account status (activate/deactivate)
     const UpdateStatusAccount = useCallback(
         async ({ newStatus, studentId }) => {
             try {
@@ -242,6 +503,7 @@ export const AdminDisplayProvider = ({ children }) => {
                 const status = res.data?.status || res.data?.data?.status;
 
                 if (status === true) {
+                    await FetchAdminData(); // Refresh the list to show updated status
                     return { success: true };
                 }
 
@@ -257,7 +519,7 @@ export const AdminDisplayProvider = ({ children }) => {
                 return { success: false };
             }
         },
-        [authToken],
+        [authToken, FetchAdminData],
     );
 
     // Handler para sa search (nagre-reset ng page)
@@ -282,7 +544,7 @@ export const AdminDisplayProvider = ({ children }) => {
         if (!authToken) return;
         fetchFaculty();
         FetchAdminData();
-    }, [authToken, currentPage, limit, searchTerm, roleFilter, FetchAdminData, fetchFaculty]);
+    }, [authToken, currentPage, limit, searchTerm, roleFilter]); // Removed FetchAdminData from dependencies to avoid infinite loop
 
     // Close modal
     const handleCloseModal = useCallback(() => {
@@ -293,6 +555,7 @@ export const AdminDisplayProvider = ({ children }) => {
     return (
         <AdminDisplayContext.Provider
             value={{
+                // Data states
                 admins,
                 totalAdminCount,
                 totalPages,
@@ -300,23 +563,44 @@ export const AdminDisplayProvider = ({ children }) => {
                 limit,
                 searchTerm,
                 roleFilter,
-                setAdmins,
-                loading,
+                faculty,
                 adminProfile,
+                loading,
+                
+                // Student related states
+                students,
+                selectedStudent,
+                studentLoading,
+                
+                // Setter functions (if needed for direct manipulation)
+                setAdmins,
+                setCurrentPage,
+                setSearchTerm,
+                setRoleFilter,
+                setLimit,
+                setSelectedStudent,
+                
+                // CRUD Operations
                 FetchAdminData,
                 FetchProfileData,
                 DeleteAdmin,
                 UpdateAdmin,
                 AddAdmin,
+                UpdateStatusAccount,
+                
+                // Student & Adviser/Co-Adviser Operations
+                FetchStudents,
+                FetchStudentById,
+                InsertAdvicerCoAdviser,
+                UpdateAdvicerCoAdviser,
+                RemoveAdvicerCoAdviser,
+                GetStudentAdvisers,
+                
+                // UI Handlers
                 handleSearch,
                 handlePageChange,
                 handleRoleFilter,
-                setLimit,
-                setCurrentPage,
-                setSearchTerm,
-                setRoleFilter,
-                UpdateStatusAccount,
-                faculty,
+                handleCloseModal,
             }}
         >
             {children}

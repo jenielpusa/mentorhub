@@ -19,7 +19,7 @@ const StudentDocumentation = () => {
       icon: Settings,
       image: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=800&auto=format&fit=crop",
       count: "320+ Projects",
-      color: "border-yellow-500"
+      color: "border-cyan-500"
     },
     {
       id: 3,
@@ -37,7 +37,7 @@ const StudentDocumentation = () => {
       icon: Briefcase,
       image: "https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=800&auto=format&fit=crop",
       count: "210+ Papers",
-      color: "border-yellow-600"
+      color: "border-sky-600"
     },
     {
       id: 5,
@@ -55,7 +55,7 @@ const StudentDocumentation = () => {
       icon: Lightbulb,
       image: "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=800&auto=format&fit=crop",
       count: "190+ Researches",
-      color: "border-yellow-400"
+      color: "border-cyan-400"
     }
   ];
 
@@ -63,22 +63,22 @@ const StudentDocumentation = () => {
     <section className="overflow-hidden py-12 md:py-16 lg:py-20">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Header - mas pinanipis */}
+        {/* Header - Blue Theme */}
         <div className="mb-8 text-center md:mb-12 lg:mb-16">
           <motion.h2 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             className="mb-3 text-2xl font-black tracking-tighter text-white sm:text-3xl md:text-4xl lg:text-5xl"
           >
-            Academic <span className="text-yellow-500">Departments</span>
+            Academic <span className="text-blue-500">Departments</span>
           </motion.h2>
-          <div className="mx-auto mb-4 h-1 w-16 rounded-full bg-yellow-500 sm:w-20 md:mb-6 md:w-24 lg:w-28" />
+          <div className="mx-auto mb-4 h-1 w-16 rounded-full bg-blue-500 sm:w-20 md:mb-6 md:w-24 lg:w-28" />
           <p className="mx-auto max-w-xl px-2 text-xs italic text-blue-100/60 sm:text-sm md:text-base lg:max-w-2xl">
             Explore the diverse research contributions of BiPSU students across different academic disciplines.
           </p>
         </div>
 
-        {/* Departments Grid - mas maliit na gaps at card heights */}
+        {/* Departments Grid */}
         <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8">
           {departments.map((dept, index) => (
             <motion.div
@@ -95,16 +95,17 @@ const StudentDocumentation = () => {
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
 
-              {/* Overlay */}
-              <div className="absolute inset-0 z-10 bg-gradient-to-t from-blue-950 via-blue-950/80 to-blue-900/50" />
+              {/* Overlay - Darker Blue shades */}
+              <div className="absolute inset-0 z-10 bg-gradient-to-t from-blue-950 via-blue-950/80 to-blue-900/40" />
 
-              {/* Content - mas maliit na padding */}
+              {/* Content */}
               <div className="absolute inset-0 z-20 flex flex-col justify-end p-4 sm:p-5 md:p-6">
                 <div className="mb-2 sm:mb-3">
-                  <div className={`mb-2 inline-flex rounded-xl bg-white/10 p-2 backdrop-blur-md border border-white/20 transition-all duration-300 group-hover:bg-yellow-500 group-hover:text-blue-950`}>
+                  {/* Icon Box - Blue/Cyan Hover */}
+                  <div className={`mb-2 inline-flex rounded-xl bg-white/10 p-2 backdrop-blur-md border border-white/20 transition-all duration-300 group-hover:bg-blue-500 group-hover:text-white`}>
                     <dept.icon size={16} className="sm:h-[18px] sm:w-[18px] md:h-5 md:w-5" />
                   </div>
-                  <h3 className="mb-1 text-base font-black text-white transition-colors group-hover:text-yellow-400 sm:text-lg md:text-xl">
+                  <h3 className="mb-1 text-base font-black text-white transition-colors group-hover:text-blue-400 sm:text-lg md:text-xl">
                     {dept.name}
                   </h3>
                   <p className="text-[0.7rem] leading-relaxed text-blue-100/80 sm:text-xs md:text-sm">
@@ -112,31 +113,31 @@ const StudentDocumentation = () => {
                   </p>
                 </div>
 
-                {/* Footer - mas nipis na padding */}
+                {/* Footer */}
                 <div className="flex items-center justify-between border-t border-white/10 pt-2 sm:pt-3">
-                  <span className="text-[0.6rem] font-bold uppercase tracking-widest text-yellow-500 sm:text-xs">
+                  <span className="text-[0.6rem] font-bold uppercase tracking-widest text-blue-400 sm:text-xs">
                     {dept.count}
                   </span>
-                  <button className="text-[0.6rem] font-black uppercase tracking-widest text-white transition-colors hover:text-yellow-400 sm:text-xs">
+                  <button className="text-[0.6rem] font-black uppercase tracking-widest text-white transition-colors hover:text-blue-400 sm:text-xs">
                     View Archives →
                   </button>
                 </div>
               </div>
 
-              {/* Decorative Glow - mas maliit */}
-              <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-yellow-500/5 blur-2xl transition-all group-hover:bg-yellow-500/10 sm:h-20 sm:w-20 md:h-24 md:w-24" />
+              {/* Decorative Glow - Blue */}
+              <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-blue-500/5 blur-2xl transition-all group-hover:bg-blue-500/20 sm:h-20 sm:w-20 md:h-24 md:w-24" />
             </motion.div>
           ))}
         </div>
 
-        {/* Summary - mas nipis */}
+        {/* Summary */}
         <motion.div 
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
-          className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-4 text-center backdrop-blur-sm sm:mt-12 sm:p-6 md:mt-16 md:p-8 lg:mt-20 lg:rounded-3xl"
+          className="mt-10 rounded-2xl border border-white/10 bg-blue-500/5 p-4 text-center backdrop-blur-sm sm:mt-12 sm:p-6 md:mt-16 md:p-8 lg:mt-20 lg:rounded-3xl"
         >
           <p className="text-[0.65rem] text-blue-200/50 sm:text-xs md:text-sm">
-            Total System Capacity: <span className="font-bold text-yellow-500">2,500+ Verified Manuscripts</span> across all departments.
+            Total System Capacity: <span className="font-bold text-blue-400">2,500+ Verified Manuscripts</span> across all departments.
           </p>
         </motion.div>
       </div>

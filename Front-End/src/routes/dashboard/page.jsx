@@ -16,6 +16,8 @@ const App = () => {
                 return <ResearchAnalytics />;
             case "student":
                 return <StudentDashboard />;
+            case "member":
+                return <StudentDashboard />;
             case "adviser":
                 return <AdviserDashboard />;
             case "instructor":
